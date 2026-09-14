@@ -1,0 +1,17 @@
+﻿name:  Reportar Bug
+description: Encontrou algo quebrado?
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    attributes:
+      label: O que aconteceu?
+      description: Descreva o comportamento inesperado.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Como reproduzir?
+      description: Passos para reproduzir o bug.
+    validations:
+      required: true

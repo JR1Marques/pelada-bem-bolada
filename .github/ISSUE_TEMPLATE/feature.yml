@@ -1,0 +1,49 @@
+﻿# ⚽ Pelada Bem Bolada
+
+> **Confirma, divide e joga**
+
+O aplicativo que organiza as partidas amadoras de futebol de forma simples, prática e equilibrada.
+
+## 🎯 O que fazemos
+- ✅ Confirmação de presença dos jogadores
+- 🔄 Divisão automática e equilibrada dos times
+- 💰 Controle de pagamentos e rateio
+- 📱 PWA (funciona offline e no celular)
+
+## ️ Stack
+- **Frontend**: Vite + React + TypeScript + Tailwind CSS + Framer Motion
+- **Backend**: Supabase (PostgreSQL + Auth)
+- **Hospedagem**: Vercel (Frontend) + Supabase (Backend)
+- **Qualidade**: Biome, Commitlint, GitHub Actions
+
+## 📋 Diretrizes
+Consulte [PROJECT_GUIDELINES.md](./PROJECT_GUIDELINES.md) para padrões de desenvolvimento.
+
+## 🚀 Começando
+\\\ash
+cd frontend
+npm install
+npm run dev
+\\\
+"@ | Out-File -FilePath "README.md" -Encoding utf8
+
+# 8. Crie template de Issue para Feature
+@"
+name:  Nova Funcionalidade
+description: Sugerir uma nova função para o app
+title: "[Feature]: "
+labels: ["feature"]
+body:
+  - type: textarea
+    attributes:
+      label: O que precisa ser feito?
+      description: Descreva a funcionalidade de forma clara e objetiva.
+      placeholder: "Ex: Tela para confirmar presença dos jogadores"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Critérios de aceite
+      description: O que precisa funcionar para considerar pronto?
+    validations:
+      required: false
