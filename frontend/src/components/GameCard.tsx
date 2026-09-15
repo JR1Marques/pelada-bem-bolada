@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from "framer-motion";
 
 interface GameCardProps {
   title: string;
@@ -10,7 +10,7 @@ interface GameCardProps {
 export const GameCard = ({ title, date, players, isLoading = false }: GameCardProps) => {
   if (isLoading) {
     return (
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"

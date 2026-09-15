@@ -1,0 +1,27 @@
+name: CI - Esteira de Qualidade
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  biome-check:
+    name: Verificar Qualidade do Código (Biome)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Clonar repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependências
+        run: npm ci
+        working-directory: ./frontend
+
+      - name: Rodar Biome (Lint e Format)
+        run: npx @biomejs/biome check .
+        working-directory: ./frontend
