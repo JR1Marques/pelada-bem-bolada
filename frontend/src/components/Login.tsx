@@ -1,17 +1,17 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { supabase } from '../lib/supabase';
+import { motion } from "framer-motion";
+import { useState } from "react";
+import { supabase } from "../lib/supabase";
 
 export const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
+    setError("");
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -22,7 +22,6 @@ export const Login = () => {
       setError(error.message);
       setIsLoading(false);
     } else {
-      // Sucesso! O App.tsx vai detectar a mudança de sessão
       setIsLoading(false);
     }
   };
@@ -34,22 +33,25 @@ export const Login = () => {
       transition={{ duration: 0.4, ease: "easeOut" }}
       className="flex flex-col items-center justify-center min-h-screen p-6 bg-gray-50"
     >
-      <motion.img 
-        src="/brasao.png" 
-        alt="Pelada Bem Bolada" 
+      <motion.img
+        src="/brasao.png"
+        alt="Pelada Bem Bolada"
         className="w-32 h-32 mb-6 drop-shadow-lg"
         initial={{ y: -20 }}
         animate={{ y: 0 }}
         transition={{ delay: 0.2 }}
       />
-      
+
       <h1 className="text-3xl font-extrabold text-pelada-blue mb-2">Bem-vindo, craque!</h1>
       <p className="text-pelada-yellow font-semibold mb-8">Confirma, divide e joga.</p>
 
       <form onSubmit={handleLogin} className="w-full max-w-sm space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            E-mail
+          </label>
           <input
+            id="email"
             type="email"
             required
             value={email}
@@ -60,8 +62,11 @@ export const Login = () => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            Senha
+          </label>
           <input
+            id="password"
             type="password"
             required
             value={password}
@@ -72,7 +77,7 @@ export const Login = () => {
         </div>
 
         {error && (
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-lg"
@@ -89,13 +94,13 @@ export const Login = () => {
           className="w-full bg-pelada-blue text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
         >
           {isLoading ? (
-            <motion.div 
+            <motion.div
               animate={{ rotate: 360 }}
               transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
               className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
             />
           ) : (
-            'Entrar na Pelada'
+            "Entrar na Pelada"
           )}
         </motion.button>
       </form>
