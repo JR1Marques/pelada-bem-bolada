@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { supabase } from '../lib/supabase';
-import { GameCard } from './GameCard';
-import { CreatePeladaModal } from './CreatePeladaModal';
-import { PeladaDetailsModal } from './PeladaDetailsModal';
+import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import { CreatePeladaModal } from "./CreatePeladaModal";
+import { GameCard } from "./GameCard";
+import { PeladaDetailsModal } from "./PeladaDetailsModal";
 
 interface Pelada {
   id: string;
@@ -11,6 +11,7 @@ interface Pelada {
   data_hora: string;
   local: string;
   valor_por_jogador: number;
+  jogadores_peladas?: { confirmou: boolean }[];
 }
 
 export const Dashboard = () => {
@@ -19,20 +20,20 @@ export const Dashboard = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedPeladaId, setSelectedPeladaId] = useState<string | null>(null);
 
-  const fetchPeladas = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('peladas')
-      .select('*')
-      .order('data_hora', { ascending: true });
-
-    if (!error && data) {
-      setPeladas(data);
-    }
-    setLoading(false);
-  };
-
   useEffect(() => {
+    const fetchPeladas = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("peladas")
+        .select("*, jogadores_peladas(confirmou)")
+        .order("data_hora", { ascending: true });
+
+      if (!error && data) {
+        setPeladas(data);
+      }
+      setLoading(false);
+    };
+
     fetchPeladas();
   }, []);
 
@@ -79,21 +80,26 @@ export const Dashboard = () => {
             <p className="text-sm mt-2">Que tal organizar a primeira?</p>
           </motion.div>
         ) : (
-          peladas.map((pelada) => (
-            <GameCard
-              key={pelada.id}
-              title={pelada.titulo}
-              date={new Date(pelada.data_hora).toLocaleString('pt-BR', {
-                weekday: 'short',
-                day: '2-digit',
-                month: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-              players={0}
-              onClick={() => setSelectedPeladaId(pelada.id)}
-            />
-          ))
+          peladas.map((pelada) => {
+            const totalConfirmados =
+              pelada.jogadores_peladas?.filter((j) => j.confirmou).length || 0;
+
+            return (
+              <GameCard
+                key={pelada.id}
+                title={pelada.titulo}
+                date={new Date(pelada.data_hora).toLocaleString("pt-BR", {
+                  weekday: "short",
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+                players={totalConfirmados}
+                onClick={() => setSelectedPeladaId(pelada.id)}
+              />
+            );
+          })
         )}
       </section>
 
@@ -110,7 +116,16 @@ export const Dashboard = () => {
       <CreatePeladaModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        onSuccess={fetchPeladas}
+        onSuccess={() => {
+          // Recarrega a lista manualmente após criar
+          supabase
+            .from("peladas")
+            .select("*, jogadores_peladas(confirmou)")
+            .order("data_hora", { ascending: true })
+            .then(({ data }) => {
+              if (data) setPeladas(data);
+            });
+        }}
       />
 
       <PeladaDetailsModal
