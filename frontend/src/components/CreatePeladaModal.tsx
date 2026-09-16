@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useState } from "react";
 import { supabase } from "../lib/supabase";
 
 interface CreatePeladaModalProps {
@@ -21,7 +21,9 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
     setIsLoading(true);
     setError("");
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user) {
       setError("Usuário não autenticado.");
@@ -98,7 +100,10 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
                 </div>
 
                 <div>
-                  <label htmlFor="dataHora" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="dataHora"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     Data e Hora
                   </label>
                   <input

@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { GameCard } from "./GameCard";
 import { CreatePeladaModal } from "./CreatePeladaModal";
+import { GameCard } from "./GameCard";
 import { PeladaDetailsModal } from "./PeladaDetailsModal";
 
 interface Pelada {
@@ -33,7 +33,7 @@ export const Dashboard = () => {
       }
       setLoading(false);
     };
-    
+
     fetchPeladas();
   }, []);
 
@@ -81,8 +81,9 @@ export const Dashboard = () => {
           </motion.div>
         ) : (
           peladas.map((pelada) => {
-            const totalConfirmados = pelada.jogadores_peladas?.filter((j) => j.confirmou).length || 0;
-            
+            const totalConfirmados =
+              pelada.jogadores_peladas?.filter((j) => j.confirmou).length || 0;
+
             return (
               <GameCard
                 key={pelada.id}

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 interface PeladaDetailsModalProps {
@@ -47,9 +47,11 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
 
   const handleConfirmar = async () => {
     if (!peladaId) return;
-    
+
     setConfirming(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user) {
       setConfirming(false);
@@ -73,7 +75,7 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
     // Recarrega a lista
     const { data } = await supabase.from("jogadores_peladas").select("*").eq("pelada_id", peladaId);
     if (data) setJogadores(data);
-    
+
     setConfirming(false);
   };
 
@@ -91,11 +93,11 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
     if (confirmados.length < 2) return;
 
     setDividindo(true);
-    
+
     setTimeout(() => {
       const embaralhados = shuffleArray(confirmados);
       const meio = Math.ceil(embaralhados.length / 2);
-      
+
       setTimeA(embaralhados.slice(0, meio));
       setTimeB(embaralhados.slice(meio));
       setDividindo(false);
@@ -219,7 +221,7 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
                           ))}
                         </div>
                       </div>
-                      
+
                       <div>
                         <h4 className="font-bold text-red-600 mb-2">Time B</h4>
                         <div className="space-y-1">
