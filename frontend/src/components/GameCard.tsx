@@ -1,13 +1,14 @@
-import { motion } from "framer-motion";
+import { motion } from 'framer-motion';
 
 interface GameCardProps {
   title: string;
   date: string;
   players: number;
   isLoading?: boolean;
+  onClick?: () => void;
 }
 
-export const GameCard = ({ title, date, players, isLoading = false }: GameCardProps) => {
+export const GameCard = ({ title, date, players, isLoading = false, onClick }: GameCardProps) => {
   if (isLoading) {
     return (
       <motion.div
@@ -26,10 +27,10 @@ export const GameCard = ({ title, date, players, isLoading = false }: GameCardPr
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
+      transition={{ duration: 0.3 }}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
+      onClick={onClick}
       className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer"
     >
       <h3 className="text-lg font-bold text-pelada-blue mb-1">{title}</h3>

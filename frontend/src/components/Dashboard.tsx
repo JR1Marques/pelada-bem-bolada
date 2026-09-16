@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { GameCard } from './GameCard';
 import { CreatePeladaModal } from './CreatePeladaModal';
+import { PeladaDetailsModal } from './PeladaDetailsModal';
 
 interface Pelada {
   id: string;
@@ -15,7 +16,8 @@ interface Pelada {
 export const Dashboard = () => {
   const [peladas, setPeladas] = useState<Pelada[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedPeladaId, setSelectedPeladaId] = useState<string | null>(null);
 
   const fetchPeladas = async () => {
     setLoading(true);
@@ -55,7 +57,7 @@ export const Dashboard = () => {
         <button
           type="button"
           onClick={handleLogout}
-          className="text-sm text-gray-500 hover:text-red-500 transition-colors"
+          className="text-sm text-gray-500 hover:text-red-500"
         >
           Sair
         </button>
@@ -69,8 +71,8 @@ export const Dashboard = () => {
           </>
         ) : peladas.length === 0 ? (
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             className="text-center py-10 text-gray-500"
           >
             <p>Nenhuma pelada marcada ainda.</p>
@@ -89,6 +91,7 @@ export const Dashboard = () => {
                 minute: '2-digit',
               })}
               players={0}
+              onClick={() => setSelectedPeladaId(pelada.id)}
             />
           ))
         )}
@@ -99,15 +102,21 @@ export const Dashboard = () => {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         className="fixed bottom-6 right-6 bg-pelada-yellow text-pelada-blue font-bold w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl z-30"
-        onClick={() => setIsModalOpen(true)}
+        onClick={() => setIsCreateModalOpen(true)}
       >
         +
       </motion.button>
 
       <CreatePeladaModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
         onSuccess={fetchPeladas}
+      />
+
+      <PeladaDetailsModal
+        peladaId={selectedPeladaId}
+        isOpen={!!selectedPeladaId}
+        onClose={() => setSelectedPeladaId(null)}
       />
     </motion.main>
   );
