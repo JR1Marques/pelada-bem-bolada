@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 
 interface PeladaDetailsModalProps {
   peladaId: string | null;
+  valorPorJogador?: number;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -16,7 +17,12 @@ interface Jogador {
   pagou: boolean;
 }
 
-export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsModalProps) => {
+export const PeladaDetailsModal = ({
+  peladaId,
+  valorPorJogador = 0,
+  isOpen,
+  onClose,
+}: PeladaDetailsModalProps) => {
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
@@ -72,11 +78,27 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
       });
     }
 
-    // Recarrega a lista
     const { data } = await supabase.from("jogadores_peladas").select("*").eq("pelada_id", peladaId);
     if (data) setJogadores(data);
 
     setConfirming(false);
+  };
+
+  const handleTogglePagamento = async (jogadorId: string, statusAtual: boolean) => {
+    const novoStatus = !statusAtual;
+
+    // Atualiza no Supabase
+    const { error } = await supabase
+      .from("jogadores_peladas")
+      .update({ pagou: novoStatus })
+      .eq("id", jogadorId);
+
+    // Atualiza na tela (otimista, mas só se não der erro no banco)
+    if (!error) {
+      setJogadores((prev) =>
+        prev.map((j) => (j.id === jogadorId ? { ...j, pagou: novoStatus } : j)),
+      );
+    }
   };
 
   const shuffleArray = (array: Jogador[]) => {
@@ -103,6 +125,13 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
       setDividindo(false);
     }, 1500);
   };
+
+  // Cálculos Financeiros
+  const totalConfirmados = jogadores.filter((j) => j.confirmou).length;
+  const totalPagantes = jogadores.filter((j) => j.pagou).length;
+  const totalEsperado = totalConfirmados * valorPorJogador;
+  const totalArrecadado = totalPagantes * valorPorJogador;
+  const faltaArrecadar = totalEsperado - totalArrecadado;
 
   return (
     <AnimatePresence>
@@ -134,9 +163,42 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
               </div>
 
               <div className="space-y-6">
+                {/* Resumo Financeiro */}
+                {valorPorJogador > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3"
+                  >
+                    <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide">
+                      Resumo Financeiro
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="bg-white p-2 rounded-lg shadow-sm">
+                        <p className="text-gray-500 text-xs">Esperado</p>
+                        <p className="font-bold text-pelada-blue">R$ {totalEsperado.toFixed(2)}</p>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg shadow-sm">
+                        <p className="text-gray-500 text-xs">Arrecadado</p>
+                        <p className="font-bold text-green-600">R$ {totalArrecadado.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    {faltaArrecadar > 0 && (
+                      <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="text-xs text-red-500 text-center font-medium"
+                      >
+                        Faltam R$ {faltaArrecadar.toFixed(2)} para fechar a conta!
+                      </motion.p>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Lista de Jogadores */}
                 <div>
                   <h3 className="font-semibold text-gray-700 mb-2">
-                    Jogadores ({jogadores.filter((j) => j.confirmou).length} confirmados)
+                    Jogadores ({totalConfirmados} confirmados)
                   </h3>
                   {loading ? (
                     <div className="space-y-2">
@@ -151,20 +213,34 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
                       {jogadores
                         .filter((j) => j.confirmou)
                         .map((jogador) => (
-                          <li
+                          <motion.li
                             key={jogador.id}
+                            layout
                             className="flex justify-between items-center bg-gray-50 p-3 rounded-lg"
                           >
                             <span className="font-medium capitalize">{jogador.nome}</span>
-                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                              Confirmou
-                            </span>
-                          </li>
+
+                            {valorPorJogador > 0 && (
+                              <motion.button
+                                type="button"
+                                onClick={() => handleTogglePagamento(jogador.id, jogador.pagou)}
+                                whileTap={{ scale: 0.9 }}
+                                className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
+                                  jogador.pagou
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-red-100 text-red-700"
+                                }`}
+                              >
+                                {jogador.pagou ? "Pago" : "Pendente"}
+                              </motion.button>
+                            )}
+                          </motion.li>
                         ))}
                     </ul>
                   )}
                 </div>
 
+                {/* Botões de Ação */}
                 <div className="grid grid-cols-2 gap-3">
                   <motion.button
                     type="button"
@@ -180,7 +256,7 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
                   <motion.button
                     type="button"
                     onClick={handleDividirTimes}
-                    disabled={dividindo || jogadores.filter((j) => j.confirmou).length < 2}
+                    disabled={dividindo || totalConfirmados < 2}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     className="bg-pelada-blue text-white font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm"
@@ -197,6 +273,7 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
                   </motion.button>
                 </div>
 
+                {/* Resultado da Divisão */}
                 <AnimatePresence>
                   {(timeA.length > 0 || timeB.length > 0) && (
                     <motion.div
