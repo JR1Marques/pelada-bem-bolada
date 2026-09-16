@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { supabase } from './lib/supabase';
-import type { Session } from '@supabase/supabase-js';
-import { Login } from './components/Login';
-import { Dashboard } from './components/Dashboard';
+import type { Session } from "@supabase/supabase-js";
+import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { Dashboard } from "./components/Dashboard";
+import { Login } from "./components/Login";
+import { supabase } from "./lib/supabase";
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -17,7 +17,9 @@ function App() {
     });
 
     // 2. Escuta mudanças no estado de autenticação (login/logout em tempo real)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
 
@@ -29,7 +31,7 @@ function App() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <motion.div 
+        <motion.div
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
           className="w-10 h-10 border-4 border-pelada-blue border-t-transparent rounded-full"

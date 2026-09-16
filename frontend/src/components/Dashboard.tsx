@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { supabase } from '../lib/supabase';
-import { GameCard } from './GameCard';
+import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import { GameCard } from "./GameCard";
 
 interface Pelada {
   id: string;
@@ -19,9 +19,9 @@ export const Dashboard = () => {
     const fetchPeladas = async () => {
       setLoading(true);
       const { data, error } = await supabase
-        .from('peladas')
-        .select('*')
-        .order('data_hora', { ascending: true });
+        .from("peladas")
+        .select("*")
+        .order("data_hora", { ascending: true });
 
       if (!error && data) {
         setPeladas(data);
@@ -37,7 +37,7 @@ export const Dashboard = () => {
   };
 
   return (
-    <motion.main 
+    <motion.main
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="min-h-screen p-6 max-w-md mx-auto"
@@ -50,7 +50,7 @@ export const Dashboard = () => {
             <p className="text-xs text-pelada-yellow font-semibold">Confirma, divide e joga!</p>
           </div>
         </div>
-        <button 
+        <button
           onClick={handleLogout}
           className="text-sm text-gray-500 hover:text-red-500 transition-colors"
         >
@@ -65,7 +65,7 @@ export const Dashboard = () => {
             <GameCard title="" date="" players={0} isLoading={true} />
           </>
         ) : peladas.length === 0 ? (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-center py-10 text-gray-500"
@@ -75,11 +75,15 @@ export const Dashboard = () => {
           </motion.div>
         ) : (
           peladas.map((pelada) => (
-            <GameCard 
+            <GameCard
               key={pelada.id}
               title={pelada.titulo}
-              date={new Date(pelada.data_hora).toLocaleString('pt-BR', { 
-                weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
+              date={new Date(pelada.data_hora).toLocaleString("pt-BR", {
+                weekday: "short",
+                day: "2-digit",
+                month: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
               })}
               players={0} // Vamos implementar a contagem de jogadores na Issue #3
             />
@@ -91,7 +95,7 @@ export const Dashboard = () => {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         className="fixed bottom-6 right-6 bg-pelada-yellow text-pelada-blue font-bold w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl"
-        onClick={() => alert('Funcionalidade de criar pelada vem na próxima Issue! 😉')}
+        onClick={() => alert("Funcionalidade de criar pelada vem na próxima Issue! 😉")}
       >
         +
       </motion.button>
