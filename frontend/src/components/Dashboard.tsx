@@ -5,12 +5,14 @@ import { GameCard } from './GameCard';
 import { CreatePeladaModal } from './CreatePeladaModal';
 import { PeladaDetailsModal } from './PeladaDetailsModal';
 
+// Atualizando a interface para incluir os jogadores
 interface Pelada {
   id: string;
   titulo: string;
   data_hora: string;
   local: string;
   valor_por_jogador: number;
+  jogadores_peladas?: { confirmou: boolean }[];
 }
 
 export const Dashboard = () => {
@@ -21,9 +23,10 @@ export const Dashboard = () => {
 
   const fetchPeladas = async () => {
     setLoading(true);
+    // Busca as peladas e traz a lista de jogadores (apenas o campo 'confirmou')
     const { data, error } = await supabase
       .from('peladas')
-      .select('*')
+      .select('*, jogadores_peladas(confirmou)')
       .order('data_hora', { ascending: true });
 
     if (!error && data) {
@@ -79,21 +82,26 @@ export const Dashboard = () => {
             <p className="text-sm mt-2">Que tal organizar a primeira?</p>
           </motion.div>
         ) : (
-          peladas.map((pelada) => (
-            <GameCard
-              key={pelada.id}
-              title={pelada.titulo}
-              date={new Date(pelada.data_hora).toLocaleString('pt-BR', {
-                weekday: 'short',
-                day: '2-digit',
-                month: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-              players={0}
-              onClick={() => setSelectedPeladaId(pelada.id)}
-            />
-          ))
+          peladas.map((pelada) => {
+            // Calcula quantos jogadores confirmaram
+            const totalConfirmados = pelada.jogadores_peladas?.filter(j => j.confirmou).length || 0;
+            
+            return (
+              <GameCard
+                key={pelada.id}
+                title={pelada.titulo}
+                date={new Date(pelada.data_hora).toLocaleString('pt-BR', {
+                  weekday: 'short',
+                  day: '2-digit',
+                  month: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+                players={totalConfirmados} // Passa a contagem real
+                onClick={() => setSelectedPeladaId(pelada.id)}
+              />
+            );
+          })
         )}
       </section>
 

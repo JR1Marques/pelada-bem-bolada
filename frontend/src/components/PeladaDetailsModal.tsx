@@ -10,6 +10,7 @@ interface PeladaDetailsModalProps {
 
 interface Jogador {
   id: string;
+  usuario_id: string;
   nome: string;
   confirmou: boolean;
   pagou: boolean;
@@ -19,10 +20,18 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  
+  // Novos estados para divisão de times
+  const [timeA, setTimeA] = useState<Jogador[]>([]);
+  const [timeB, setTimeB] = useState<Jogador[]>([]);
+  const [dividindo, setDividindo] = useState(false);
 
   useEffect(() => {
     if (isOpen && peladaId) {
       fetchJogadores();
+      // Reseta os times ao abrir o modal
+      setTimeA([]);
+      setTimeB([]);
     }
   }, [isOpen, peladaId]);
 
@@ -52,33 +61,50 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
       return;
     }
 
-    // Verifica se já está na lista
     const jaConfirmou = jogadores.find(j => j.usuario_id === user.id);
 
     if (jaConfirmou) {
-      // Remove o jogador (desfazer confirmação)
-      await supabase
-        .from('jogadores_peladas')
-        .delete()
-        .eq('id', jaConfirmou.id);
+      await supabase.from('jogadores_peladas').delete().eq('id', jaConfirmou.id);
     } else {
-      // Adiciona o jogador
-      await supabase
-        .from('jogadores_peladas')
-        .insert({
-          pelada_id: peladaId,
-          usuario_id: user.id,
-          nome: user.email || 'Jogador',
-          confirmou: true,
-          pagou: false,
-        });
+      await supabase.from('jogadores_peladas').insert({
+        pelada_id: peladaId,
+        usuario_id: user.id,
+        nome: user.email?.split('@')[0] || 'Jogador', // Usa parte do email como nome
+        confirmou: true,
+        pagou: false,
+      });
     }
 
-    await fetchJogadores(); // Atualiza a lista
+    await fetchJogadores();
     setConfirming(false);
   };
 
-  const jaConfirmou = jogadores.some(j => j.usuario_id === 'current-user-id'); // Simplificado para demonstração
+  // Função para embaralhar array (Fisher-Yates)
+  const shuffleArray = (array: Jogador[]) => {
+    const newArray = [...array];
+    for (let i = newArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+    }
+    return newArray;
+  };
+
+  const handleDividirTimes = () => {
+    const confirmados = jogadores.filter(j => j.confirmou);
+    if (confirmados.length < 2) return;
+
+    setDividindo(true);
+    
+    // Simula um tempo de "processamento" para a animação
+    setTimeout(() => {
+      const embaralhados = shuffleArray(confirmados);
+      const meio = Math.ceil(embaralhados.length / 2);
+      
+      setTimeA(embaralhados.slice(0, meio));
+      setTimeB(embaralhados.slice(meio));
+      setDividindo(false);
+    }, 1500);
+  };
 
   return (
     <AnimatePresence>
@@ -109,22 +135,25 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
+              {/* Lista de Jogadores */}
               <div>
-                <h3 className="font-semibold text-gray-700 mb-2">Jogadores Confirmados</h3>
+                <h3 className="font-semibold text-gray-700 mb-2">
+                  Jogadores ({jogadores.filter(j => j.confirmou).length} confirmados)
+                </h3>
                 {loading ? (
                   <div className="space-y-2">
                     {[1, 2, 3].map(i => (
                       <div key={i} className="h-10 bg-gray-200 rounded animate-pulse" />
                     ))}
                   </div>
-                ) : jogadores.length === 0 ? (
+                ) : jogadores.filter(j => j.confirmou).length === 0 ? (
                   <p className="text-gray-500 text-sm">Nenhum jogador confirmado ainda.</p>
                 ) : (
-                  <ul className="space-y-2">
-                    {jogadores.map(jogador => (
+                  <ul className="space-y-2 max-h-40 overflow-y-auto">
+                    {jogadores.filter(j => j.confirmou).map(jogador => (
                       <li key={jogador.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-                        <span className="font-medium">{jogador.nome}</span>
+                        <span className="font-medium capitalize">{jogador.nome}</span>
                         <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
                           Confirmou
                         </span>
@@ -134,24 +163,84 @@ export const PeladaDetailsModal = ({ peladaId, isOpen, onClose }: PeladaDetailsM
                 )}
               </div>
 
-              <motion.button
-                type="button"
-                onClick={handleConfirmar}
-                disabled={confirming}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full bg-pelada-yellow text-pelada-blue font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2"
-              >
-                {confirming ? (
+              {/* Botões de Ação */}
+              <div className="grid grid-cols-2 gap-3">
+                <motion.button
+                  type="button"
+                  onClick={handleConfirmar}
+                  disabled={confirming}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="bg-pelada-yellow text-pelada-blue font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm"
+                >
+                  {confirming ? '...' : 'Confirmar'}
+                </motion.button>
+
+                <motion.button
+                  type="button"
+                  onClick={handleDividirTimes}
+                  disabled={dividindo || jogadores.filter(j => j.confirmou).length < 2}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="bg-pelada-blue text-white font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm"
+                >
+                  {dividindo ? (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 1 }}
+                      className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                    />
+                  ) : (
+                    'Dividir Times'
+                  )}
+                </motion.button>
+              </div>
+
+              {/* Resultado da Divisão */}
+              <AnimatePresence>
+                {(timeA.length > 0 || timeB.length > 0) && (
                   <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 1 }}
-                    className="w-5 h-5 border-2 border-pelada-blue border-t-transparent rounded-full"
-                  />
-                ) : (
-                  'Confirmar Presença'
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-4 pt-4 border-t border-gray-200"
+                  >
+                    <div>
+                      <h4 className="font-bold text-pelada-blue mb-2">Time A</h4>
+                      <div className="space-y-1">
+                        {timeA.map((j, i) => (
+                          <motion.div
+                            key={j.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                            className="bg-blue-50 p-2 rounded text-sm capitalize"
+                          >
+                            {j.nome}
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-bold text-red-600 mb-2">Time B</h4>
+                      <div className="space-y-1">
+                        {timeB.map((j, i) => (
+                          <motion.div
+                            key={j.id}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                            className="bg-red-50 p-2 rounded text-sm capitalize"
+                          >
+                            {j.nome}
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
                 )}
-              </motion.button>
+              </AnimatePresence>
             </div>
           </motion.div>
         </>
