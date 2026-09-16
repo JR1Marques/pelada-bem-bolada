@@ -1,7 +1,8 @@
-import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
-import { GameCard } from "./GameCard";
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { supabase } from '../lib/supabase';
+import { GameCard } from './GameCard';
+import { CreatePeladaModal } from './CreatePeladaModal';
 
 interface Pelada {
   id: string;
@@ -14,21 +15,22 @@ interface Pelada {
 export const Dashboard = () => {
   const [peladas, setPeladas] = useState<Pelada[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const fetchPeladas = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('peladas')
+      .select('*')
+      .order('data_hora', { ascending: true });
+
+    if (!error && data) {
+      setPeladas(data);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const fetchPeladas = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("peladas")
-        .select("*")
-        .order("data_hora", { ascending: true });
-
-      if (!error && data) {
-        setPeladas(data);
-      }
-      setLoading(false);
-    };
-
     fetchPeladas();
   }, []);
 
@@ -40,7 +42,7 @@ export const Dashboard = () => {
     <motion.main
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-screen p-6 max-w-md mx-auto"
+      className="min-h-screen p-6 max-w-md mx-auto relative"
     >
       <header className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-3">
@@ -79,27 +81,34 @@ export const Dashboard = () => {
             <GameCard
               key={pelada.id}
               title={pelada.titulo}
-              date={new Date(pelada.data_hora).toLocaleString("pt-BR", {
-                weekday: "short",
-                day: "2-digit",
-                month: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
+              date={new Date(pelada.data_hora).toLocaleString('pt-BR', {
+                weekday: 'short',
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
               })}
-              players={0} // Vamos implementar a contagem de jogadores na Issue #3
+              players={0}
             />
           ))
         )}
       </section>
 
       <motion.button
+        type="button"
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className="fixed bottom-6 right-6 bg-pelada-yellow text-pelada-blue font-bold w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl"
-        onClick={() => alert("Funcionalidade de criar pelada vem na próxima Issue! 😉")}
+        className="fixed bottom-6 right-6 bg-pelada-yellow text-pelada-blue font-bold w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl z-30"
+        onClick={() => setIsModalOpen(true)}
       >
         +
       </motion.button>
+
+      <CreatePeladaModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={fetchPeladas}
+      />
     </motion.main>
   );
 };
