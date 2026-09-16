@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { supabase } from '../lib/supabase';
-import { GameCard } from './GameCard';
-import { CreatePeladaModal } from './CreatePeladaModal';
-import { PeladaDetailsModal } from './PeladaDetailsModal';
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { supabase } from "../lib/supabase";
+import { GameCard } from "./GameCard";
+import { CreatePeladaModal } from "./CreatePeladaModal";
+import { PeladaDetailsModal } from "./PeladaDetailsModal";
 
-// Atualizando a interface para incluir os jogadores
 interface Pelada {
   id: string;
   titulo: string;
@@ -21,21 +20,20 @@ export const Dashboard = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedPeladaId, setSelectedPeladaId] = useState<string | null>(null);
 
-  const fetchPeladas = async () => {
-    setLoading(true);
-    // Busca as peladas e traz a lista de jogadores (apenas o campo 'confirmou')
-    const { data, error } = await supabase
-      .from('peladas')
-      .select('*, jogadores_peladas(confirmou)')
-      .order('data_hora', { ascending: true });
-
-    if (!error && data) {
-      setPeladas(data);
-    }
-    setLoading(false);
-  };
-
   useEffect(() => {
+    const fetchPeladas = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("peladas")
+        .select("*, jogadores_peladas(confirmou)")
+        .order("data_hora", { ascending: true });
+
+      if (!error && data) {
+        setPeladas(data);
+      }
+      setLoading(false);
+    };
+    
     fetchPeladas();
   }, []);
 
@@ -83,21 +81,20 @@ export const Dashboard = () => {
           </motion.div>
         ) : (
           peladas.map((pelada) => {
-            // Calcula quantos jogadores confirmaram
-            const totalConfirmados = pelada.jogadores_peladas?.filter(j => j.confirmou).length || 0;
+            const totalConfirmados = pelada.jogadores_peladas?.filter((j) => j.confirmou).length || 0;
             
             return (
               <GameCard
                 key={pelada.id}
                 title={pelada.titulo}
-                date={new Date(pelada.data_hora).toLocaleString('pt-BR', {
-                  weekday: 'short',
-                  day: '2-digit',
-                  month: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
+                date={new Date(pelada.data_hora).toLocaleString("pt-BR", {
+                  weekday: "short",
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
                 })}
-                players={totalConfirmados} // Passa a contagem real
+                players={totalConfirmados}
                 onClick={() => setSelectedPeladaId(pelada.id)}
               />
             );
@@ -118,7 +115,16 @@ export const Dashboard = () => {
       <CreatePeladaModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        onSuccess={fetchPeladas}
+        onSuccess={() => {
+          // Recarrega a lista manualmente após criar
+          supabase
+            .from("peladas")
+            .select("*, jogadores_peladas(confirmou)")
+            .order("data_hora", { ascending: true })
+            .then(({ data }) => {
+              if (data) setPeladas(data);
+            });
+        }}
       />
 
       <PeladaDetailsModal
