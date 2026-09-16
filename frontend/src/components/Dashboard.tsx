@@ -130,6 +130,7 @@ export const Dashboard = () => {
 
       <PeladaDetailsModal
         peladaId={selectedPeladaId}
+        valorPorJogador={peladas.find((p) => p.id === selectedPeladaId)?.valor_por_jogador || 0}
         isOpen={!!selectedPeladaId}
         onClose={() => setSelectedPeladaId(null)}
       />
