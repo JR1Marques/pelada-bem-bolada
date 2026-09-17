@@ -69,10 +69,13 @@ export const PeladaDetailsModal = ({
     if (jaConfirmou) {
       await supabase.from("jogadores_peladas").delete().eq("id", jaConfirmou.id);
     } else {
+      // AQUI ESTÁ A MÁGICA: Pega o apelido do metadata, senão usa o email
+      const nomeExibicao = user.user_metadata?.nickname || user.email?.split("@")[0] || "Jogador";
+
       await supabase.from("jogadores_peladas").insert({
         pelada_id: peladaId,
         usuario_id: user.id,
-        nome: user.email?.split("@")[0] || "Jogador",
+        nome: nomeExibicao,
         confirmou: true,
         pagou: false,
       });
@@ -87,13 +90,11 @@ export const PeladaDetailsModal = ({
   const handleTogglePagamento = async (jogadorId: string, statusAtual: boolean) => {
     const novoStatus = !statusAtual;
 
-    // Atualiza no Supabase
     const { error } = await supabase
       .from("jogadores_peladas")
       .update({ pagou: novoStatus })
       .eq("id", jogadorId);
 
-    // Atualiza na tela (otimista, mas só se não der erro no banco)
     if (!error) {
       setJogadores((prev) =>
         prev.map((j) => (j.id === jogadorId ? { ...j, pagou: novoStatus } : j)),
@@ -126,7 +127,6 @@ export const PeladaDetailsModal = ({
     }, 1500);
   };
 
-  // Cálculos Financeiros
   const totalConfirmados = jogadores.filter((j) => j.confirmou).length;
   const totalPagantes = jogadores.filter((j) => j.pagou).length;
   const totalEsperado = totalConfirmados * valorPorJogador;
@@ -163,7 +163,6 @@ export const PeladaDetailsModal = ({
               </div>
 
               <div className="space-y-6">
-                {/* Resumo Financeiro */}
                 {valorPorJogador > 0 && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
@@ -195,7 +194,6 @@ export const PeladaDetailsModal = ({
                   </motion.div>
                 )}
 
-                {/* Lista de Jogadores */}
                 <div>
                   <h3 className="font-semibold text-gray-700 mb-2">
                     Jogadores ({totalConfirmados} confirmados)
@@ -240,7 +238,6 @@ export const PeladaDetailsModal = ({
                   )}
                 </div>
 
-                {/* Botões de Ação */}
                 <div className="grid grid-cols-2 gap-3">
                   <motion.button
                     type="button"
@@ -273,7 +270,6 @@ export const PeladaDetailsModal = ({
                   </motion.button>
                 </div>
 
-                {/* Resultado da Divisão */}
                 <AnimatePresence>
                   {(timeA.length > 0 || timeB.length > 0) && (
                     <motion.div

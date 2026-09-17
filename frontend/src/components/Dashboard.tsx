@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import { CreatePeladaModal } from "./CreatePeladaModal";
 import { GameCard } from "./GameCard";
 import { PeladaDetailsModal } from "./PeladaDetailsModal";
+import { ProfileModal } from "./ProfileModal";
 
 interface Pelada {
   id: string;
@@ -11,7 +12,7 @@ interface Pelada {
   data_hora: string;
   local: string;
   valor_por_jogador: number;
-  jogadores_peladas?: { confirmou: boolean }[];
+  jogadores_peladas?: { confirmou: boolean; pagou: boolean; usuario_id: string }[];
 }
 
 export const Dashboard = () => {
@@ -19,13 +20,15 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedPeladaId, setSelectedPeladaId] = useState<string | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [userNickname, setUserNickname] = useState("Jogador");
 
   useEffect(() => {
     const fetchPeladas = async () => {
       setLoading(true);
       const { data, error } = await supabase
         .from("peladas")
-        .select("*, jogadores_peladas(confirmou)")
+        .select("*, jogadores_peladas(confirmou, pagou, usuario_id)")
         .order("data_hora", { ascending: true });
 
       if (!error && data) {
@@ -34,7 +37,19 @@ export const Dashboard = () => {
       setLoading(false);
     };
 
+    const loadUserProfile = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.user_metadata?.nickname) {
+        setUserNickname(user.user_metadata.nickname);
+      } else if (user?.email) {
+        setUserNickname(user.email.split("@")[0]);
+      }
+    };
+
     fetchPeladas();
+    loadUserProfile();
   }, []);
 
   const handleLogout = async () => {
@@ -55,13 +70,22 @@ export const Dashboard = () => {
             <p className="text-xs text-pelada-yellow font-semibold">Confirma, divide e joga!</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="text-sm text-gray-500 hover:text-red-500"
-        >
-          Sair
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setIsProfileOpen(true)}
+            className="text-sm font-semibold text-pelada-blue hover:text-blue-800 transition-colors flex items-center gap-1"
+          >
+            👤 {userNickname}
+          </button>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="text-sm text-gray-500 hover:text-red-500 transition-colors"
+          >
+            Sair
+          </button>
+        </div>
       </header>
 
       <section className="space-y-4">
@@ -117,10 +141,9 @@ export const Dashboard = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={() => {
-          // Recarrega a lista manualmente após criar
           supabase
             .from("peladas")
-            .select("*, jogadores_peladas(confirmou)")
+            .select("*, jogadores_peladas(confirmou, pagou, usuario_id)")
             .order("data_hora", { ascending: true })
             .then(({ data }) => {
               if (data) setPeladas(data);
@@ -134,6 +157,10 @@ export const Dashboard = () => {
         isOpen={!!selectedPeladaId}
         onClose={() => setSelectedPeladaId(null)}
       />
+
+      <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
     </motion.main>
   );
 };
+
+export default Dashboard;
