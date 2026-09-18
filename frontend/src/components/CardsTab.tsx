@@ -1,19 +1,24 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { GroupSettingsModal } from "./GroupSettingsModal";
 
 interface Membro {
   usuario_id: string;
   nome: string;
   posicao: string;
   media_estrelas: number;
+  categoria: string;
+  papel: string;
 }
 
 export const CardsTab = () => {
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [ehAdmin, setEhAdmin] = useState(false);
   const [avaliando, setAvaliando] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -23,20 +28,23 @@ export const CardsTab = () => {
       } = await supabase.auth.getUser();
       setCurrentUserId(user?.id || null);
 
-      // Busca membros do grupo padrão e suas médias de estrelas
       const { data: grupo } = await supabase.from("grupos").select("id").limit(1).single();
 
       if (grupo && user) {
-        const { data: membrosData } = await supabase
+        // Verifica se é admin
+        const { data: meuMembro } = await supabase
           .from("membros_grupo")
-          .select("usuario_id, auth:usuario_id(nickname, position)") // Puxa do metadata via RPC ou simplificado
+          .select("papel")
           .eq("grupo_id", grupo.id)
-          .eq("status", "aprovado");
+          .eq("usuario_id", user.id)
+          .single();
 
-        // Como o join direto com auth.users é restrito, vamos buscar os perfis e avaliações separadamente para simplificar
+        setEhAdmin(meuMembro?.papel === "admin" || meuMembro?.papel === "co-admin");
+
+        // Busca membros
         const { data: membrosSimples } = await supabase
           .from("membros_grupo")
-          .select("usuario_id")
+          .select("usuario_id, categoria, papel")
           .eq("grupo_id", grupo.id)
           .eq("status", "aprovado");
 
@@ -44,11 +52,6 @@ export const CardsTab = () => {
           const membrosComDetalhes: Membro[] = [];
 
           for (const m of membrosSimples) {
-            const { data: userData } = await supabase.auth.admin.getUserById(m.usuario_id); // Nota: em produção usamos uma Edge Function ou RPC, mas para MVP local funciona se tiver permissão, senão usamos o metadata do usuário logado.
-            // Para simplificar e evitar erros de permissão do admin, vamos usar o que temos no banco de avaliações e perfis.
-
-            // Busca o nome (nickname) via uma query simples na tabela de peladas onde ele jogou, ou usamos o email.
-            // *Simplificação para o MVP*: Vamos buscar o nome na tabela `jogadores_peladas` ou usar o email.
             const { data: jogadorData } = await supabase
               .from("jogadores_peladas")
               .select("nome")
@@ -57,23 +60,26 @@ export const CardsTab = () => {
               .single();
             const nome = jogadorData?.nome || "Jogador";
 
-            // Busca a posição no metadata (via uma função RPC seria o ideal, aqui vamos pular a posição por enquanto para não travar)
-
-            // Calcula média de estrelas
             const { data: avaliacoes } = await supabase
               .from("avaliacoes")
               .select("estrelas")
               .eq("avaliado_id", m.usuario_id)
               .eq("grupo_id", grupo.id);
-            const total = avaliacoes?.reduce((acc, curr) => acc + curr.estrelas, 0) || 0;
+            const total =
+              avaliacoes?.reduce(
+                (acc: number, curr: { estrelas: number }) => acc + curr.estrelas,
+                0,
+              ) || 0;
             const count = avaliacoes?.length || 0;
             const media = count > 0 ? total / count : 0;
 
             membrosComDetalhes.push({
               usuario_id: m.usuario_id,
               nome,
-              posicao: "Curinga", // Placeholder até ajustarmos a query de metadata
+              posicao: "Curinga",
               media_estrelas: media,
+              categoria: m.categoria || "comum",
+              papel: m.papel || "membro",
             });
           }
           setMembros(membrosComDetalhes);
@@ -100,13 +106,13 @@ export const CardsTab = () => {
       { onConflict: "avaliador_id,avaliado_id,grupo_id" },
     );
 
-    // Recarrega para atualizar a média
     const { data: avaliacoes } = await supabase
       .from("avaliacoes")
       .select("estrelas")
       .eq("avaliado_id", avaliadoId)
       .eq("grupo_id", grupo.id);
-    const total = avaliacoes?.reduce((acc, curr) => acc + curr.estrelas, 0) || 0;
+    const total =
+      avaliacoes?.reduce((acc: number, curr: { estrelas: number }) => acc + curr.estrelas, 0) || 0;
     const count = avaliacoes?.length || 0;
     const novaMedia = count > 0 ? total / count : 0;
 
@@ -116,9 +122,43 @@ export const CardsTab = () => {
     setAvaliando(null);
   };
 
+  const handleMudarCategoria = async (usuarioId: string, novaCategoria: string) => {
+    const { data: grupo } = await supabase.from("grupos").select("id").limit(1).single();
+
+    await supabase
+      .from("membros_grupo")
+      .update({ categoria: novaCategoria })
+      .eq("grupo_id", grupo.id)
+      .eq("usuario_id", usuarioId);
+
+    setMembros((prev) =>
+      prev.map((m) => (m.usuario_id === usuarioId ? { ...m, categoria: novaCategoria } : m)),
+    );
+  };
+
+  const formatarCategoria = (cat: string) => {
+    if (cat === "mensalista") return "Mensalista";
+    if (cat === "premium") return "Avulso Premium";
+    return "Avulso Comum";
+  };
+
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold text-pelada-blue mb-4">Cards da Galera</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-pelada-blue">Cards da Galera</h2>
+        {ehAdmin && (
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsSettingsOpen(true)}
+            className="text-sm bg-gray-200 text-gray-700 px-3 py-1 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+          >
+            ⚙️ Configurações
+          </motion.button>
+        )}
+      </div>
+
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -135,8 +175,15 @@ export const CardsTab = () => {
             animate={{ opacity: 1, y: 0 }}
             className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center"
           >
-            <div>
-              <h3 className="font-bold text-gray-800 capitalize">{membro.nome}</h3>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-gray-800 capitalize">{membro.nome}</h3>
+                {membro.papel === "admin" && (
+                  <span className="text-xs bg-pelada-yellow text-pelada-blue px-2 py-0.5 rounded-full font-bold">
+                    ADMIN
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-gray-500">{membro.posicao}</p>
               <div className="flex items-center gap-1 mt-1">
                 <span className="text-yellow-500 text-sm">★</span>
@@ -146,30 +193,51 @@ export const CardsTab = () => {
               </div>
             </div>
 
-            {membro.usuario_id !== currentUserId && (
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((estrela) => (
-                  <motion.button
-                    key={estrela}
-                    type="button"
-                    whileHover={{ scale: 1.2 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => handleAvaliar(membro.usuario_id, estrela)}
-                    disabled={avaliando === membro.usuario_id}
-                    className={`text-2xl transition-colors ${
-                      estrela <= Math.round(membro.media_estrelas)
-                        ? "text-yellow-400"
-                        : "text-gray-300"
-                    }`}
-                  >
-                    ★
-                  </motion.button>
-                ))}
-              </div>
-            )}
+            <div className="flex flex-col items-end gap-2">
+              {ehAdmin && membro.usuario_id !== currentUserId && (
+                <select
+                  value={membro.categoria}
+                  onChange={(e) => handleMudarCategoria(membro.usuario_id, e.target.value)}
+                  className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:ring-1 focus:ring-pelada-blue outline-none"
+                >
+                  <option value="mensalista">Mensalista</option>
+                  <option value="premium">Avulso Premium</option>
+                  <option value="comum">Avulso Comum</option>
+                </select>
+              )}
+              {!ehAdmin && (
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded font-medium">
+                  {formatarCategoria(membro.categoria)}
+                </span>
+              )}
+
+              {membro.usuario_id !== currentUserId && (
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((estrela) => (
+                    <motion.button
+                      key={estrela}
+                      type="button"
+                      whileHover={{ scale: 1.2 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => handleAvaliar(membro.usuario_id, estrela)}
+                      disabled={avaliando === membro.usuario_id}
+                      className={`text-xl transition-colors ${
+                        estrela <= Math.round(membro.media_estrelas)
+                          ? "text-yellow-400"
+                          : "text-gray-300"
+                      }`}
+                    >
+                      ★
+                    </motion.button>
+                  ))}
+                </div>
+              )}
+            </div>
           </motion.div>
         ))
       )}
+
+      <GroupSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 };
