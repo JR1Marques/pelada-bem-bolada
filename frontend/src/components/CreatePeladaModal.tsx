@@ -31,12 +31,15 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
       return;
     }
 
+    const { data: grupoPadrao } = await supabase.from("grupos").select("id").limit(1).single();
+
     const { error: dbError } = await supabase.from("peladas").insert({
       titulo,
       data_hora: new Date(dataHora).toISOString(),
       local,
       valor_por_jogador: valor ? parseFloat(valor) : 0,
       criado_por: user.id,
+      grupo_id: grupoPadrao?.id || null,
     });
 
     if (dbError) {
