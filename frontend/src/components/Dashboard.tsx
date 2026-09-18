@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { CardsTab } from "./CardsTab";
 import { CreatePeladaModal } from "./CreatePeladaModal";
 import { GameCard } from "./GameCard";
 import { PeladaDetailsModal } from "./PeladaDetailsModal";
@@ -22,6 +23,7 @@ export const Dashboard = () => {
   const [selectedPeladaId, setSelectedPeladaId] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userNickname, setUserNickname] = useState("Jogador");
+  const [activeTab, setActiveTab] = useState<"peladas" | "cards">("peladas");
 
   useEffect(() => {
     const fetchPeladas = async () => {
@@ -88,44 +90,72 @@ export const Dashboard = () => {
         </div>
       </header>
 
-      <section className="space-y-4">
-        {loading ? (
-          <>
-            <GameCard title="" date="" players={0} isLoading={true} />
-            <GameCard title="" date="" players={0} isLoading={true} />
-          </>
-        ) : peladas.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-10 text-gray-500"
-          >
-            <p>Nenhuma pelada marcada ainda.</p>
-            <p className="text-sm mt-2">Que tal organizar a primeira?</p>
-          </motion.div>
-        ) : (
-          peladas.map((pelada) => {
-            const totalConfirmados =
-              pelada.jogadores_peladas?.filter((j) => j.confirmou).length || 0;
+      {/* Seletor de Abas */}
+      <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab("peladas")}
+          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+            activeTab === "peladas" ? "bg-white text-pelada-blue shadow-sm" : "text-gray-500"
+          }`}
+        >
+          Peladas
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("cards")}
+          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+            activeTab === "cards" ? "bg-white text-pelada-blue shadow-sm" : "text-gray-500"
+          }`}
+        >
+          Cards
+        </button>
+      </div>
 
-            return (
-              <GameCard
-                key={pelada.id}
-                title={pelada.titulo}
-                date={new Date(pelada.data_hora).toLocaleString("pt-BR", {
-                  weekday: "short",
-                  day: "2-digit",
-                  month: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-                players={totalConfirmados}
-                onClick={() => setSelectedPeladaId(pelada.id)}
-              />
-            );
-          })
-        )}
-      </section>
+      {/* Conteúdo da Aba Peladas */}
+      {activeTab === "peladas" && (
+        <section className="space-y-4">
+          {loading ? (
+            <>
+              <GameCard title="" date="" players={0} isLoading={true} />
+              <GameCard title="" date="" players={0} isLoading={true} />
+            </>
+          ) : peladas.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-10 text-gray-500"
+            >
+              <p>Nenhuma pelada marcada ainda.</p>
+              <p className="text-sm mt-2">Que tal organizar a primeira?</p>
+            </motion.div>
+          ) : (
+            peladas.map((pelada) => {
+              const totalConfirmados =
+                pelada.jogadores_peladas?.filter((j) => j.confirmou).length || 0;
+
+              return (
+                <GameCard
+                  key={pelada.id}
+                  title={pelada.titulo}
+                  date={new Date(pelada.data_hora).toLocaleString("pt-BR", {
+                    weekday: "short",
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  players={totalConfirmados}
+                  onClick={() => setSelectedPeladaId(pelada.id)}
+                />
+              );
+            })
+          )}
+        </section>
+      )}
+
+      {/* Conteúdo da Aba Cards */}
+      {activeTab === "cards" && <CardsTab />}
 
       <motion.button
         type="button"
