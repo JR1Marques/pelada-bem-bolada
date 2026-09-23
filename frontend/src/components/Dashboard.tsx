@@ -1,9 +1,11 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { AdminTab } from "./AdminTab";
 import { CardsTab } from "./CardsTab";
 import { CreatePeladaModal } from "./CreatePeladaModal";
 import { GameCard } from "./GameCard";
+import { PaymentTab } from "./PaymentTab";
 import { PeladaDetailsModal } from "./PeladaDetailsModal";
 import { ProfileModal } from "./ProfileModal";
 
@@ -16,6 +18,8 @@ interface Pelada {
   jogadores_peladas?: { confirmou: boolean; pagou: boolean; usuario_id: string }[];
 }
 
+type TabType = "peladas" | "cards" | "admin" | "pagamento";
+
 export const Dashboard = () => {
   const [peladas, setPeladas] = useState<Pelada[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,11 +27,35 @@ export const Dashboard = () => {
   const [selectedPeladaId, setSelectedPeladaId] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userNickname, setUserNickname] = useState("Jogador");
-  const [activeTab, setActiveTab] = useState<"peladas" | "cards">("peladas");
+  const [activeTab, setActiveTab] = useState<TabType>("peladas");
+  const [ehAdmin, setEhAdmin] = useState(false);
 
   useEffect(() => {
-    const fetchPeladas = async () => {
+    const fetchData = async () => {
       setLoading(true);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user?.user_metadata?.nickname) {
+        setUserNickname(user.user_metadata.nickname);
+      } else if (user?.email) {
+        setUserNickname(user.email.split("@")[0]);
+      }
+
+      // Verifica se é admin
+      const { data: grupo } = await supabase.from("grupos").select("id").limit(1).single();
+      if (grupo && user) {
+        const { data: meuMembro } = await supabase
+          .from("membros_grupo")
+          .select("papel")
+          .eq("grupo_id", grupo.id)
+          .eq("usuario_id", user.id)
+          .single();
+        setEhAdmin(meuMembro?.papel === "admin" || meuMembro?.papel === "co-admin");
+      }
+
+      // Busca peladas
       const { data, error } = await supabase
         .from("peladas")
         .select("*, jogadores_peladas(confirmou, pagou, usuario_id)")
@@ -39,24 +67,22 @@ export const Dashboard = () => {
       setLoading(false);
     };
 
-    const loadUserProfile = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user?.user_metadata?.nickname) {
-        setUserNickname(user.user_metadata.nickname);
-      } else if (user?.email) {
-        setUserNickname(user.email.split("@")[0]);
-      }
-    };
-
-    fetchPeladas();
-    loadUserProfile();
+    fetchData();
   }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
+
+  // Monta as abas conforme o papel do usuário
+  const tabs: { key: TabType; label: string; show: boolean }[] = [
+    { key: "peladas", label: "Peladas", show: true },
+    { key: "cards", label: "Cards", show: true },
+    { key: "admin", label: "Admin", show: ehAdmin },
+    { key: "pagamento", label: "Pagamento", show: !ehAdmin },
+  ];
+
+  const visibleTabs = tabs.filter((t) => t.show);
 
   return (
     <motion.main
@@ -64,7 +90,7 @@ export const Dashboard = () => {
       animate={{ opacity: 1 }}
       className="min-h-screen p-6 max-w-md mx-auto relative"
     >
-      <header className="flex justify-between items-center mb-8">
+      <header className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <img src="/brasao.png" alt="Logo" className="w-12 h-12 drop-shadow-md" />
           <div>
@@ -90,29 +116,23 @@ export const Dashboard = () => {
         </div>
       </header>
 
-      {/* Seletor de Abas */}
+      {/* Seletor de Abas Dinâmico */}
       <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
-        <button
-          type="button"
-          onClick={() => setActiveTab("peladas")}
-          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
-            activeTab === "peladas" ? "bg-white text-pelada-blue shadow-sm" : "text-gray-500"
-          }`}
-        >
-          Peladas
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("cards")}
-          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
-            activeTab === "cards" ? "bg-white text-pelada-blue shadow-sm" : "text-gray-500"
-          }`}
-        >
-          Cards
-        </button>
+        {visibleTabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+              activeTab === tab.key ? "bg-white text-pelada-blue shadow-sm" : "text-gray-500"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Conteúdo da Aba Peladas */}
+      {/* Conteúdo das Abas */}
       {activeTab === "peladas" && (
         <section className="space-y-4">
           {loading ? (
@@ -154,8 +174,9 @@ export const Dashboard = () => {
         </section>
       )}
 
-      {/* Conteúdo da Aba Cards */}
       {activeTab === "cards" && <CardsTab />}
+      {activeTab === "admin" && <AdminTab />}
+      {activeTab === "pagamento" && <PaymentTab />}
 
       <motion.button
         type="button"

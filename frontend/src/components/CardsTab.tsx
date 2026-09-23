@@ -1,7 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { GroupSettingsModal } from "./GroupSettingsModal";
 
 interface Membro {
   usuario_id: string;
@@ -18,7 +17,6 @@ export const CardsTab = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [ehAdmin, setEhAdmin] = useState(false);
   const [avaliando, setAvaliando] = useState<string | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -146,17 +144,6 @@ export const CardsTab = () => {
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold text-pelada-blue">Cards da Galera</h2>
-        {ehAdmin && (
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsSettingsOpen(true)}
-            className="text-sm bg-gray-200 text-gray-700 px-3 py-1 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-          >
-            ⚙️ Configurações
-          </motion.button>
-        )}
       </div>
 
       {loading ? (
@@ -236,8 +223,6 @@ export const CardsTab = () => {
           </motion.div>
         ))
       )}
-
-      <GroupSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 };
