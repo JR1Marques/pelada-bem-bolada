@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 interface CreatePeladaModalProps {
@@ -13,8 +13,24 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
   const [dataHora, setDataHora] = useState("");
   const [local, setLocal] = useState("");
   const [valor, setValor] = useState("");
+  const [vagasGoleiros, setVagasGoleiros] = useState("2");
+  const [vagasLinha, setVagasLinha] = useState("15");
+  const [quantidadeTimes, setQuantidadeTimes] = useState("2");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setTitulo("");
+      setDataHora("");
+      setLocal("");
+      setValor("");
+      setVagasGoleiros("2");
+      setVagasLinha("15");
+      setQuantidadeTimes("2");
+      setError("");
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +56,9 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
       valor_por_jogador: valor ? parseFloat(valor) : 0,
       criado_por: user.id,
       grupo_id: grupoPadrao?.id || null,
+      vagas_goleiros: parseInt(vagasGoleiros) || 2,
+      vagas_linha: parseInt(vagasLinha) || 15,
+      quantidade_times: parseInt(quantidadeTimes) || 2,
     });
 
     if (dbError) {
@@ -49,10 +68,6 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
       setIsLoading(false);
       onSuccess();
       onClose();
-      setTitulo("");
-      setDataHora("");
-      setLocal("");
-      setValor("");
     }
   };
 
@@ -148,6 +163,63 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
                     className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-pelada-blue focus:border-transparent outline-none transition-all"
                     placeholder="0.00"
                   />
+                </div>
+
+                <div className="border-t border-gray-200 pt-4">
+                  <h3 className="text-sm font-bold text-gray-700 mb-3">Configuração de Vagas</h3>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label
+                        htmlFor="vagasGoleiros"
+                        className="block text-xs font-medium text-gray-600 mb-1"
+                      >
+                        Goleiros
+                      </label>
+                      <input
+                        id="vagasGoleiros"
+                        type="number"
+                        min="1"
+                        value={vagasGoleiros}
+                        onChange={(e) => setVagasGoleiros(e.target.value)}
+                        className="w-full px-2 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-pelada-blue outline-none text-center text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="vagasLinha"
+                        className="block text-xs font-medium text-gray-600 mb-1"
+                      >
+                        Linha
+                      </label>
+                      <input
+                        id="vagasLinha"
+                        type="number"
+                        min="1"
+                        value={vagasLinha}
+                        onChange={(e) => setVagasLinha(e.target.value)}
+                        className="w-full px-2 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-pelada-blue outline-none text-center text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="quantidadeTimes"
+                        className="block text-xs font-medium text-gray-600 mb-1"
+                      >
+                        Times
+                      </label>
+                      <input
+                        id="quantidadeTimes"
+                        type="number"
+                        min="2"
+                        value={quantidadeTimes}
+                        onChange={(e) => setQuantidadeTimes(e.target.value)}
+                        className="w-full px-2 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-pelada-blue outline-none text-center text-sm"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {error && (

@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { PeladaListas } from "./PeladaListas";
 
 interface PeladaDetailsModalProps {
   peladaId: string | null;
@@ -17,6 +18,12 @@ interface Jogador {
   pagou: boolean;
 }
 
+interface Pelada {
+  vagas_goleiros: number;
+  vagas_linha: number;
+  quantidade_times: number;
+}
+
 export const PeladaDetailsModal = ({
   peladaId,
   valorPorJogador = 0,
@@ -24,6 +31,7 @@ export const PeladaDetailsModal = ({
   onClose,
 }: PeladaDetailsModalProps) => {
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
+  const [pelada, setPelada] = useState<Pelada | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [timeA, setTimeA] = useState<Jogador[]>([]);
@@ -33,8 +41,21 @@ export const PeladaDetailsModal = ({
   useEffect(() => {
     if (!isOpen || !peladaId) return;
 
-    const fetchJogadores = async () => {
+    const fetchData = async () => {
       setLoading(true);
+
+      // Busca dados da pelada
+      const { data: peladaData } = await supabase
+        .from("peladas")
+        .select("vagas_goleiros, vagas_linha, quantidade_times")
+        .eq("id", peladaId)
+        .single();
+
+      if (peladaData) {
+        setPelada(peladaData);
+      }
+
+      // Busca jogadores
       const { data, error } = await supabase
         .from("jogadores_peladas")
         .select("*")
@@ -46,7 +67,7 @@ export const PeladaDetailsModal = ({
       setLoading(false);
     };
 
-    fetchJogadores();
+    fetchData();
     setTimeA([]);
     setTimeB([]);
   }, [isOpen, peladaId]);
@@ -69,7 +90,6 @@ export const PeladaDetailsModal = ({
     if (jaConfirmou) {
       await supabase.from("jogadores_peladas").delete().eq("id", jaConfirmou.id);
     } else {
-      // AQUI ESTÁ A MÁGICA: Pega o apelido do metadata, senão usa o email
       const nomeExibicao = user.user_metadata?.nickname || user.email?.split("@")[0] || "Jogador";
 
       await supabase.from("jogadores_peladas").insert({
@@ -78,6 +98,7 @@ export const PeladaDetailsModal = ({
         nome: nomeExibicao,
         confirmou: true,
         pagou: false,
+        confirmou_em: new Date().toISOString(),
       });
     }
 
@@ -194,49 +215,13 @@ export const PeladaDetailsModal = ({
                   </motion.div>
                 )}
 
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">
-                    Jogadores ({totalConfirmados} confirmados)
-                  </h3>
-                  {loading ? (
-                    <div className="space-y-2">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-10 bg-gray-200 rounded animate-pulse" />
-                      ))}
-                    </div>
-                  ) : jogadores.filter((j) => j.confirmou).length === 0 ? (
-                    <p className="text-gray-500 text-sm">Nenhum jogador confirmado ainda.</p>
-                  ) : (
-                    <ul className="space-y-2 max-h-40 overflow-y-auto">
-                      {jogadores
-                        .filter((j) => j.confirmou)
-                        .map((jogador) => (
-                          <motion.li
-                            key={jogador.id}
-                            layout
-                            className="flex justify-between items-center bg-gray-50 p-3 rounded-lg"
-                          >
-                            <span className="font-medium capitalize">{jogador.nome}</span>
-
-                            {valorPorJogador > 0 && (
-                              <motion.button
-                                type="button"
-                                onClick={() => handleTogglePagamento(jogador.id, jogador.pagou)}
-                                whileTap={{ scale: 0.9 }}
-                                className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
-                                  jogador.pagou
-                                    ? "bg-green-100 text-green-700"
-                                    : "bg-red-100 text-red-700"
-                                }`}
-                              >
-                                {jogador.pagou ? "Pago" : "Pendente"}
-                              </motion.button>
-                            )}
-                          </motion.li>
-                        ))}
-                    </ul>
-                  )}
-                </div>
+                {pelada && (
+                  <PeladaListas
+                    peladaId={peladaId}
+                    vagasGoleiros={pelada.vagas_goleiros}
+                    vagasLinha={pelada.vagas_linha}
+                  />
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <motion.button
