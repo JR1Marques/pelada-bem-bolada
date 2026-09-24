@@ -16,12 +16,14 @@ interface Jogador {
   nome: string;
   confirmou: boolean;
   pagou: boolean;
+  status_confirmacao?: string;
 }
 
 interface Pelada {
   vagas_goleiros: number;
   vagas_linha: number;
   quantidade_times: number;
+  data_hora: string;
 }
 
 export const PeladaDetailsModal = ({
@@ -53,7 +55,6 @@ export const PeladaDetailsModal = ({
       } = await supabase.auth.getUser();
       setCurrentUserId(user?.id || null);
 
-      // Verifica se o usuário é mensalista
       if (user) {
         const { data: grupo } = await supabase.from("grupos").select("id").limit(1).single();
         if (grupo) {
@@ -69,7 +70,7 @@ export const PeladaDetailsModal = ({
 
       const { data: peladaData } = await supabase
         .from("peladas")
-        .select("vagas_goleiros, vagas_linha, quantidade_times")
+        .select("vagas_goleiros, vagas_linha, quantidade_times, data_hora")
         .eq("id", peladaId)
         .single();
 
@@ -114,8 +115,16 @@ export const PeladaDetailsModal = ({
     const jaConfirmou = jogadores.find((j) => j.usuario_id === user.id);
 
     if (jaConfirmou) {
-      await supabase.from("jogadores_peladas").delete().eq("id", jaConfirmou.id);
-      mostrarMensagem("Sua presença foi cancelada.");
+      if (jaConfirmou.status_confirmacao === "presenca") {
+        await supabase.from("jogadores_peladas").delete().eq("id", jaConfirmou.id);
+        mostrarMensagem("Sua presença foi cancelada.");
+      } else {
+        await supabase
+          .from("jogadores_peladas")
+          .update({ status_confirmacao: "presenca", confirmou_em: new Date().toISOString() })
+          .eq("id", jaConfirmou.id);
+        mostrarMensagem("Você confirmou sua presença nesta partida! ⚽");
+      }
     } else {
       const nomeExibicao = user.user_metadata?.nickname || user.email?.split("@")[0] || "Jogador";
 
@@ -125,6 +134,7 @@ export const PeladaDetailsModal = ({
         nome: nomeExibicao,
         confirmou: true,
         pagou: false,
+        status_confirmacao: "presenca",
         confirmou_em: new Date().toISOString(),
       });
       mostrarMensagem("Você confirmou sua presença nesta partida! ⚽");
@@ -140,16 +150,26 @@ export const PeladaDetailsModal = ({
     if (!peladaId || !currentUserId) return;
 
     setConfirming(true);
-    const nomeExibicao = "Você";
 
-    await supabase.from("jogadores_peladas").insert({
-      pelada_id: peladaId,
-      usuario_id: currentUserId,
-      nome: nomeExibicao,
-      confirmou: false,
-      pagou: false,
-      confirmou_em: new Date().toISOString(),
-    });
+    const jaConfirmou = jogadores.find((j) => j.usuario_id === currentUserId);
+
+    if (jaConfirmou) {
+      await supabase
+        .from("jogadores_peladas")
+        .update({ status_confirmacao: "ausencia", confirmou_em: new Date().toISOString() })
+        .eq("id", jaConfirmou.id);
+    } else {
+      const nomeExibicao = "Você";
+      await supabase.from("jogadores_peladas").insert({
+        pelada_id: peladaId,
+        usuario_id: currentUserId,
+        nome: nomeExibicao,
+        confirmou: false,
+        pagou: false,
+        status_confirmacao: "ausencia",
+        confirmou_em: new Date().toISOString(),
+      });
+    }
 
     mostrarMensagem("Você confirmou sua ausência. Os avulsos podem acompanhar as vagas.");
 
@@ -184,7 +204,7 @@ export const PeladaDetailsModal = ({
   };
 
   const handleDividirTimes = async () => {
-    const confirmados = jogadores.filter((j) => j.confirmou);
+    const confirmados = jogadores.filter((j) => j.confirmou && j.status_confirmacao === "presenca");
     if (confirmados.length < 2 || !pelada) return;
 
     setDividindo(true);
@@ -223,17 +243,19 @@ export const PeladaDetailsModal = ({
     setDividindo(false);
   };
 
-  const totalConfirmados = jogadores.filter((j) => j.confirmou).length;
+  const totalConfirmados = jogadores.filter(
+    (j) => j.confirmou && j.status_confirmacao === "presenca",
+  ).length;
   const totalPagantes = jogadores.filter((j) => j.pagou).length;
   const totalEsperado = totalConfirmados * valorPorJogador;
   const totalArrecadado = totalPagantes * valorPorJogador;
   const faltaArrecadar = totalEsperado - totalArrecadado;
 
   const jaConfirmou = currentUserId
-    ? jogadores.some((j) => j.usuario_id === currentUserId && j.confirmou)
+    ? jogadores.some((j) => j.usuario_id === currentUserId && j.status_confirmacao === "presenca")
     : false;
   const jaConfirmouAusencia = currentUserId
-    ? jogadores.some((j) => j.usuario_id === currentUserId && !j.confirmou)
+    ? jogadores.some((j) => j.usuario_id === currentUserId && j.status_confirmacao === "ausencia")
     : false;
 
   return (
@@ -265,7 +287,6 @@ export const PeladaDetailsModal = ({
                 </button>
               </div>
 
-              {/* Mensagem de Sucesso */}
               <AnimatePresence>
                 {mensagemSucesso && (
                   <motion.div
@@ -316,10 +337,10 @@ export const PeladaDetailsModal = ({
                     peladaId={peladaId}
                     vagasGoleiros={pelada.vagas_goleiros}
                     vagasLinha={pelada.vagas_linha}
+                    dataHora={pelada.data_hora}
                   />
                 )}
 
-                {/* Botões de Ação */}
                 <div className="space-y-2">
                   <motion.button
                     type="button"
@@ -346,7 +367,6 @@ export const PeladaDetailsModal = ({
                     )}
                   </motion.button>
 
-                  {/* Botão de Ausência - Apenas para Mensalistas */}
                   {ehMensalista && !jaConfirmou && !jaConfirmouAusencia && (
                     <motion.button
                       type="button"
