@@ -37,14 +37,36 @@ export const PeladaDetailsModal = ({
   const [timeA, setTimeA] = useState<Jogador[]>([]);
   const [timeB, setTimeB] = useState<Jogador[]>([]);
   const [dividindo, setDividindo] = useState(false);
+  const [mensagemSucesso, setMensagemSucesso] = useState("");
+  const [ehMensalista, setEhMensalista] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen || !peladaId) return;
 
     const fetchData = async () => {
       setLoading(true);
+      setMensagemSucesso("");
 
-      // Busca dados da pelada
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id || null);
+
+      // Verifica se o usuário é mensalista
+      if (user) {
+        const { data: grupo } = await supabase.from("grupos").select("id").limit(1).single();
+        if (grupo) {
+          const { data: meuMembro } = await supabase
+            .from("membros_grupo")
+            .select("categoria")
+            .eq("grupo_id", grupo.id)
+            .eq("usuario_id", user.id)
+            .single();
+          setEhMensalista(meuMembro?.categoria === "mensalista");
+        }
+      }
+
       const { data: peladaData } = await supabase
         .from("peladas")
         .select("vagas_goleiros, vagas_linha, quantidade_times")
@@ -55,7 +77,6 @@ export const PeladaDetailsModal = ({
         setPelada(peladaData);
       }
 
-      // Busca jogadores
       const { data, error } = await supabase
         .from("jogadores_peladas")
         .select("*")
@@ -71,6 +92,11 @@ export const PeladaDetailsModal = ({
     setTimeA([]);
     setTimeB([]);
   }, [isOpen, peladaId]);
+
+  const mostrarMensagem = (texto: string) => {
+    setMensagemSucesso(texto);
+    setTimeout(() => setMensagemSucesso(""), 3000);
+  };
 
   const handleConfirmar = async () => {
     if (!peladaId) return;
@@ -89,6 +115,7 @@ export const PeladaDetailsModal = ({
 
     if (jaConfirmou) {
       await supabase.from("jogadores_peladas").delete().eq("id", jaConfirmou.id);
+      mostrarMensagem("Sua presença foi cancelada.");
     } else {
       const nomeExibicao = user.user_metadata?.nickname || user.email?.split("@")[0] || "Jogador";
 
@@ -100,7 +127,31 @@ export const PeladaDetailsModal = ({
         pagou: false,
         confirmou_em: new Date().toISOString(),
       });
+      mostrarMensagem("Você confirmou sua presença nesta partida! ⚽");
     }
+
+    const { data } = await supabase.from("jogadores_peladas").select("*").eq("pelada_id", peladaId);
+    if (data) setJogadores(data);
+
+    setConfirming(false);
+  };
+
+  const handleConfirmarAusencia = async () => {
+    if (!peladaId || !currentUserId) return;
+
+    setConfirming(true);
+    const nomeExibicao = "Você";
+
+    await supabase.from("jogadores_peladas").insert({
+      pelada_id: peladaId,
+      usuario_id: currentUserId,
+      nome: nomeExibicao,
+      confirmou: false,
+      pagou: false,
+      confirmou_em: new Date().toISOString(),
+    });
+
+    mostrarMensagem("Você confirmou sua ausência. Os avulsos podem acompanhar as vagas.");
 
     const { data } = await supabase.from("jogadores_peladas").select("*").eq("pelada_id", peladaId);
     if (data) setJogadores(data);
@@ -138,36 +189,34 @@ export const PeladaDetailsModal = ({
 
     setDividindo(true);
 
-    // Busca a posição de cada jogador
     const jogadoresComPosicao: { jogador: Jogador; posicao: string }[] = [];
 
     for (const j of confirmados) {
-      const { data: userData } = await supabase.auth.admin.getUserById(j.usuario_id);
-      const posicao = userData?.user?.user_metadata?.position || "Curinga";
+      const { data: perfil } = await supabase
+        .from("perfis")
+        .select("posicao")
+        .eq("usuario_id", j.usuario_id)
+        .single();
+      const posicao = perfil?.posicao || "Curinga";
       jogadoresComPosicao.push({ jogador: j, posicao });
     }
 
-    // Separa goleiros e jogadores de linha
     const goleiros = jogadoresComPosicao.filter((j) => j.posicao === "Goleiro");
     const linha = jogadoresComPosicao.filter((j) => j.posicao !== "Goleiro");
 
-    // Embaralha apenas os jogadores de linha
     const linhaEmbaralhada = shuffleArray(linha.map((j) => j.jogador));
 
-    // Distribui os jogadores de linha entre os times
     const times: Jogador[][] = Array.from({ length: pelada.quantidade_times }, () => []);
     linhaEmbaralhada.forEach((jogador, index) => {
       times[index % pelada.quantidade_times].push(jogador);
     });
 
-    // Distribui os goleiros (um para cada time, se houver goleiros suficientes)
     goleiros.forEach((g, index) => {
       if (index < pelada.quantidade_times) {
-        times[index].unshift(g.jogador); // Adiciona o goleiro no início do time
+        times[index].unshift(g.jogador);
       }
     });
 
-    // Define os dois primeiros times para exibição (Time A e Time B)
     setTimeA(times[0] || []);
     setTimeB(times[1] || []);
 
@@ -179,6 +228,13 @@ export const PeladaDetailsModal = ({
   const totalEsperado = totalConfirmados * valorPorJogador;
   const totalArrecadado = totalPagantes * valorPorJogador;
   const faltaArrecadar = totalEsperado - totalArrecadado;
+
+  const jaConfirmou = currentUserId
+    ? jogadores.some((j) => j.usuario_id === currentUserId && j.confirmou)
+    : false;
+  const jaConfirmouAusencia = currentUserId
+    ? jogadores.some((j) => j.usuario_id === currentUserId && !j.confirmou)
+    : false;
 
   return (
     <AnimatePresence>
@@ -208,6 +264,20 @@ export const PeladaDetailsModal = ({
                   &times;
                 </button>
               </div>
+
+              {/* Mensagem de Sucesso */}
+              <AnimatePresence>
+                {mensagemSucesso && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: "auto" }}
+                    exit={{ opacity: 0, y: -10, height: 0 }}
+                    className="mb-4 bg-green-50 border border-green-200 text-green-700 text-sm font-medium p-3 rounded-lg text-center"
+                  >
+                    {mensagemSucesso}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <div className="space-y-6">
                 {valorPorJogador > 0 && (
@@ -249,17 +319,54 @@ export const PeladaDetailsModal = ({
                   />
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
+                {/* Botões de Ação */}
+                <div className="space-y-2">
                   <motion.button
                     type="button"
                     onClick={handleConfirmar}
                     disabled={confirming}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-pelada-yellow text-pelada-blue font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm"
+                    className={`w-full font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm ${
+                      jaConfirmou
+                        ? "bg-red-100 text-red-700 hover:bg-red-200"
+                        : "bg-pelada-yellow text-pelada-blue hover:bg-yellow-400"
+                    }`}
                   >
-                    {confirming ? "..." : "Confirmar"}
+                    {confirming ? (
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 1 }}
+                        className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
+                      />
+                    ) : jaConfirmou ? (
+                      "Cancelar Presença"
+                    ) : (
+                      "Confirmar Presença"
+                    )}
                   </motion.button>
+
+                  {/* Botão de Ausência - Apenas para Mensalistas */}
+                  {ehMensalista && !jaConfirmou && !jaConfirmouAusencia && (
+                    <motion.button
+                      type="button"
+                      onClick={handleConfirmarAusencia}
+                      disabled={confirming}
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="w-full bg-gray-100 text-gray-700 font-bold py-2 rounded-lg shadow-sm hover:bg-gray-200 disabled:opacity-50 flex justify-center items-center gap-2 text-xs"
+                    >
+                      {confirming ? "..." : "Confirmar Ausência (Mensalista)"}
+                    </motion.button>
+                  )}
+
+                  {jaConfirmouAusencia && (
+                    <p className="text-xs text-center text-gray-500 italic">
+                      Você confirmou sua ausência.
+                    </p>
+                  )}
 
                   <motion.button
                     type="button"
@@ -267,7 +374,7 @@ export const PeladaDetailsModal = ({
                     disabled={dividindo || totalConfirmados < 2}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-pelada-blue text-white font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm"
+                    className="w-full bg-pelada-blue text-white font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm"
                   >
                     {dividindo ? (
                       <motion.div

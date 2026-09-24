@@ -28,7 +28,6 @@ export const PeladaListas = ({ peladaId, vagasGoleiros, vagasLinha }: PeladaList
     const carregarListas = async () => {
       setLoading(true);
 
-      // Busca todos os jogadores confirmados
       const { data: jogadores } = await supabase
         .from("jogadores_peladas")
         .select("*")
@@ -37,17 +36,25 @@ export const PeladaListas = ({ peladaId, vagasGoleiros, vagasLinha }: PeladaList
         .order("confirmou_em", { ascending: true });
 
       if (!jogadores || jogadores.length === 0) {
+        setGoleirosTitulares([]);
+        setGoleirosEspera([]);
+        setLinhaTitulares([]);
+        setLinhaEspera([]);
         setLoading(false);
         return;
       }
 
-      // Busca a posição de cada jogador no user_metadata
-      const jogadoresComPosicao: Jogador[] = [];
+      const jogadoresComDetalhes: Jogador[] = [];
 
       for (const j of jogadores) {
-        // Busca o usuário no auth para pegar o metadata
-        const { data: userData } = await supabase.auth.admin.getUserById(j.usuario_id);
-        const posicao = userData?.user?.user_metadata?.position || "Curinga";
+        // Busca a posição da tabela perfis (pública!)
+        const { data: perfil } = await supabase
+          .from("perfis")
+          .select("posicao")
+          .eq("usuario_id", j.usuario_id)
+          .single();
+
+        const posicao = perfil?.posicao || "Curinga";
 
         // Busca a categoria do membro
         const { data: membroData } = await supabase
@@ -56,7 +63,7 @@ export const PeladaListas = ({ peladaId, vagasGoleiros, vagasLinha }: PeladaList
           .eq("usuario_id", j.usuario_id)
           .single();
 
-        jogadoresComPosicao.push({
+        jogadoresComDetalhes.push({
           id: j.id,
           usuario_id: j.usuario_id,
           nome: j.nome,
@@ -66,11 +73,9 @@ export const PeladaListas = ({ peladaId, vagasGoleiros, vagasLinha }: PeladaList
         });
       }
 
-      // Separa goleiros e jogadores de linha
-      const goleiros = jogadoresComPosicao.filter((j) => j.posicao === "Goleiro");
-      const linha = jogadoresComPosicao.filter((j) => j.posicao !== "Goleiro");
+      const goleiros = jogadoresComDetalhes.filter((j) => j.posicao === "Goleiro");
+      const linha = jogadoresComDetalhes.filter((j) => j.posicao !== "Goleiro");
 
-      // Preenche titulares e espera
       setGoleirosTitulares(goleiros.slice(0, vagasGoleiros));
       setGoleirosEspera(goleiros.slice(vagasGoleiros));
       setLinhaTitulares(linha.slice(0, vagasLinha));
