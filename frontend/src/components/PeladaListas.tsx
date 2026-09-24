@@ -31,23 +31,44 @@ export const PeladaListas = ({ peladaId, vagasGoleiros, vagasLinha }: PeladaList
       // Busca todos os jogadores confirmados
       const { data: jogadores } = await supabase
         .from("jogadores_peladas")
-        .select("*, perfis(*), membros_grupo(categoria)")
+        .select("*")
         .eq("pelada_id", peladaId)
         .eq("confirmou", true)
         .order("confirmou_em", { ascending: true });
 
-      if (!jogadores) {
+      if (!jogadores || jogadores.length === 0) {
         setLoading(false);
         return;
       }
 
+      // Busca a posição de cada jogador no user_metadata
+      const jogadoresComPosicao: Jogador[] = [];
+
+      for (const j of jogadores) {
+        // Busca o usuário no auth para pegar o metadata
+        const { data: userData } = await supabase.auth.admin.getUserById(j.usuario_id);
+        const posicao = userData?.user?.user_metadata?.position || "Curinga";
+
+        // Busca a categoria do membro
+        const { data: membroData } = await supabase
+          .from("membros_grupo")
+          .select("categoria")
+          .eq("usuario_id", j.usuario_id)
+          .single();
+
+        jogadoresComPosicao.push({
+          id: j.id,
+          usuario_id: j.usuario_id,
+          nome: j.nome,
+          posicao,
+          categoria: membroData?.categoria || "comum",
+          confirmou_em: j.confirmou_em,
+        });
+      }
+
       // Separa goleiros e jogadores de linha
-      const goleiros = jogadores.filter(
-        (j) => j.perfis?.posicao === "Goleiro" || j.posicao === "Goleiro",
-      );
-      const linha = jogadores.filter(
-        (j) => j.perfis?.posicao !== "Goleiro" && j.posicao !== "Goleiro",
-      );
+      const goleiros = jogadoresComPosicao.filter((j) => j.posicao === "Goleiro");
+      const linha = jogadoresComPosicao.filter((j) => j.posicao !== "Goleiro");
 
       // Preenche titulares e espera
       setGoleirosTitulares(goleiros.slice(0, vagasGoleiros));
@@ -77,11 +98,7 @@ export const PeladaListas = ({ peladaId, vagasGoleiros, vagasLinha }: PeladaList
           >
             <span className="font-medium capitalize">{j.nome}</span>
             <span className="text-xs text-gray-500">
-              {j.membros_grupo?.categoria === "mensalista"
-                ? "M"
-                : j.membros_grupo?.categoria === "premium"
-                  ? "P"
-                  : "C"}
+              {j.categoria === "mensalista" ? "M" : j.categoria === "premium" ? "P" : "C"}
             </span>
           </motion.div>
         ))

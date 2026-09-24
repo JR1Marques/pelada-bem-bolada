@@ -132,20 +132,46 @@ export const PeladaDetailsModal = ({
     return newArray;
   };
 
-  const handleDividirTimes = () => {
+  const handleDividirTimes = async () => {
     const confirmados = jogadores.filter((j) => j.confirmou);
-    if (confirmados.length < 2) return;
+    if (confirmados.length < 2 || !pelada) return;
 
     setDividindo(true);
 
-    setTimeout(() => {
-      const embaralhados = shuffleArray(confirmados);
-      const meio = Math.ceil(embaralhados.length / 2);
+    // Busca a posição de cada jogador
+    const jogadoresComPosicao: { jogador: Jogador; posicao: string }[] = [];
 
-      setTimeA(embaralhados.slice(0, meio));
-      setTimeB(embaralhados.slice(meio));
-      setDividindo(false);
-    }, 1500);
+    for (const j of confirmados) {
+      const { data: userData } = await supabase.auth.admin.getUserById(j.usuario_id);
+      const posicao = userData?.user?.user_metadata?.position || "Curinga";
+      jogadoresComPosicao.push({ jogador: j, posicao });
+    }
+
+    // Separa goleiros e jogadores de linha
+    const goleiros = jogadoresComPosicao.filter((j) => j.posicao === "Goleiro");
+    const linha = jogadoresComPosicao.filter((j) => j.posicao !== "Goleiro");
+
+    // Embaralha apenas os jogadores de linha
+    const linhaEmbaralhada = shuffleArray(linha.map((j) => j.jogador));
+
+    // Distribui os jogadores de linha entre os times
+    const times: Jogador[][] = Array.from({ length: pelada.quantidade_times }, () => []);
+    linhaEmbaralhada.forEach((jogador, index) => {
+      times[index % pelada.quantidade_times].push(jogador);
+    });
+
+    // Distribui os goleiros (um para cada time, se houver goleiros suficientes)
+    goleiros.forEach((g, index) => {
+      if (index < pelada.quantidade_times) {
+        times[index].unshift(g.jogador); // Adiciona o goleiro no início do time
+      }
+    });
+
+    // Define os dois primeiros times para exibição (Time A e Time B)
+    setTimeA(times[0] || []);
+    setTimeB(times[1] || []);
+
+    setDividindo(false);
   };
 
   const totalConfirmados = jogadores.filter((j) => j.confirmou).length;
