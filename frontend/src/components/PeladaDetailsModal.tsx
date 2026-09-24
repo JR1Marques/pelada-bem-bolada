@@ -99,6 +99,27 @@ export const PeladaDetailsModal = ({
     setTimeout(() => setMensagemSucesso(""), 3000);
   };
 
+  const buscarPosicaoDoUsuario = async (userId: string): Promise<string> => {
+    // 1. Tenta ler da tabela perfis
+    const { data: perfil } = await supabase
+      .from("perfis")
+      .select("posicao")
+      .eq("usuario_id", userId)
+      .single();
+
+    if (perfil?.posicao) return perfil.posicao;
+
+    // 2. Fallback: tenta ler do metadata do usuário logado
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user?.id === userId && user.user_metadata?.position) {
+      return user.user_metadata.position;
+    }
+
+    return "Curinga";
+  };
+
   const handleConfirmar = async () => {
     if (!peladaId) return;
 
@@ -119,14 +140,21 @@ export const PeladaDetailsModal = ({
         await supabase.from("jogadores_peladas").delete().eq("id", jaConfirmou.id);
         mostrarMensagem("Sua presença foi cancelada.");
       } else {
+        const posicao = await buscarPosicaoDoUsuario(user.id);
         await supabase
           .from("jogadores_peladas")
-          .update({ status_confirmacao: "presenca", confirmou_em: new Date().toISOString() })
+          .update({
+            status_confirmacao: "presenca",
+            confirmou: true,
+            confirmou_em: new Date().toISOString(),
+            posicao,
+          })
           .eq("id", jaConfirmou.id);
         mostrarMensagem("Você confirmou sua presença nesta partida! ⚽");
       }
     } else {
       const nomeExibicao = user.user_metadata?.nickname || user.email?.split("@")[0] || "Jogador";
+      const posicao = await buscarPosicaoDoUsuario(user.id);
 
       await supabase.from("jogadores_peladas").insert({
         pelada_id: peladaId,
@@ -136,6 +164,7 @@ export const PeladaDetailsModal = ({
         pagou: false,
         status_confirmacao: "presenca",
         confirmou_em: new Date().toISOString(),
+        posicao,
       });
       mostrarMensagem("Você confirmou sua presença nesta partida! ⚽");
     }
@@ -156,10 +185,18 @@ export const PeladaDetailsModal = ({
     if (jaConfirmou) {
       await supabase
         .from("jogadores_peladas")
-        .update({ status_confirmacao: "ausencia", confirmou_em: new Date().toISOString() })
+        .update({
+          status_confirmacao: "ausencia",
+          confirmou: false,
+          confirmou_em: new Date().toISOString(),
+        })
         .eq("id", jaConfirmou.id);
     } else {
-      const nomeExibicao = "Você";
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const nomeExibicao = user?.user_metadata?.nickname || user?.email?.split("@")[0] || "Jogador";
+
       await supabase.from("jogadores_peladas").insert({
         pelada_id: peladaId,
         usuario_id: currentUserId,
@@ -168,6 +205,7 @@ export const PeladaDetailsModal = ({
         pagou: false,
         status_confirmacao: "ausencia",
         confirmou_em: new Date().toISOString(),
+        posicao: await buscarPosicaoDoUsuario(currentUserId),
       });
     }
 
@@ -212,12 +250,7 @@ export const PeladaDetailsModal = ({
     const jogadoresComPosicao: { jogador: Jogador; posicao: string }[] = [];
 
     for (const j of confirmados) {
-      const { data: perfil } = await supabase
-        .from("perfis")
-        .select("posicao")
-        .eq("usuario_id", j.usuario_id)
-        .single();
-      const posicao = perfil?.posicao || "Curinga";
+      const posicao = j.posicao || (await buscarPosicaoDoUsuario(j.usuario_id));
       jogadoresComPosicao.push({ jogador: j, posicao });
     }
 
