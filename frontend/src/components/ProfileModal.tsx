@@ -25,7 +25,6 @@ export const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
           setNickname(user.user_metadata?.nickname || user.email?.split("@")[0] || "");
           setPosition(user.user_metadata?.position || "Curinga");
 
-          // Carrega dados da tabela perfis
           const { data: perfil } = await supabase
             .from("perfis")
             .select("*")
@@ -35,6 +34,7 @@ export const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
           if (perfil) {
             setBirthDate(perfil.data_nascimento || "");
             setPhone(perfil.telefone || "");
+            if (perfil.posicao) setPosition(perfil.posicao);
           }
         }
       };
@@ -53,16 +53,17 @@ export const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    // 1. Atualiza metadata (apelido e posição)
+    // 1. Atualiza metadata (apelido)
     await supabase.auth.updateUser({
       data: { nickname: nickname.trim(), position },
     });
 
-    // 2. Atualiza ou cria a linha na tabela perfis
+    // 2. Atualiza ou cria a linha na tabela perfis (com a posição!)
     const { error: perfilError } = await supabase.from("perfis").upsert({
       usuario_id: user.id,
       data_nascimento: birthDate || null,
       telefone: phone || null,
+      posicao: position,
     });
 
     if (!perfilError) {
@@ -97,7 +98,7 @@ export const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
                 <button
                   type="button"
                   onClick={onClose}
-                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
                 >
                   &times;
                 </button>
