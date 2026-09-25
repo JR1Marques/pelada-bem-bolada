@@ -36,6 +36,7 @@ export const PeladaListas = ({
     const carregarListas = async () => {
       setLoading(true);
 
+      // Query simples sem joins
       const { data: jogadores } = await supabase
         .from("jogadores_peladas")
         .select("*")
@@ -55,10 +56,10 @@ export const PeladaListas = ({
       const jogadoresComDetalhes: Jogador[] = [];
 
       for (const j of jogadores) {
-        // 1. Tenta ler a posição da própria tabela jogadores_peladas
+        // Busca posição da própria tabela
         let posicao = j.posicao;
 
-        // 2. Se não tiver, tenta ler da tabela perfis
+        // Fallback: busca da tabela perfis
         if (!posicao || posicao === "Curinga") {
           const { data: perfil } = await supabase
             .from("perfis")
@@ -70,7 +71,7 @@ export const PeladaListas = ({
           }
         }
 
-        // 3. Busca a categoria do membro
+        // Busca categoria
         const { data: membroData } = await supabase
           .from("membros_grupo")
           .select("categoria")
@@ -94,14 +95,12 @@ export const PeladaListas = ({
       );
       setMensalistasAusentes(ausentes);
 
-      // Filtra apenas quem confirmou presença para as listas
+      // Filtra apenas quem confirmou presença
       const presentes = jogadoresComDetalhes.filter((j) => j.status_confirmacao === "presenca");
 
-      // Separa por posição
       const goleiros = presentes.filter((j) => j.posicao === "Goleiro");
       const linha = presentes.filter((j) => j.posicao !== "Goleiro");
 
-      // Aplica regra de prioridade
       const golResult = processarLista(goleiros, vagasGoleiros, dataHora);
       const linResult = processarLista(linha, vagasLinha, dataHora);
 
@@ -125,7 +124,6 @@ export const PeladaListas = ({
     const mensalistasPresenca = jogadores.filter((j) => j.categoria === "mensalista");
     const avulsosPresenca = jogadores.filter((j) => j.categoria !== "mensalista");
 
-    // Calcula vagas reservadas para mensalistas pendentes
     const mensalistasPendentes = mensalistasPresenca.filter(
       (j) => j.status_confirmacao === "pendente",
     );
@@ -133,7 +131,6 @@ export const PeladaListas = ({
 
     const titulares: (Jogador | null)[] = Array(vagas).fill(null);
 
-    // 1. Preenche com mensalistas que confirmaram presença
     let idx = 0;
     for (const j of mensalistasPresenca) {
       if (idx < vagas) {
@@ -142,7 +139,6 @@ export const PeladaListas = ({
       }
     }
 
-    // 2. Reserva vagas para mensalistas pendentes
     for (const j of mensalistasPendentes) {
       if (idx < vagas && !passouLimite) {
         titulares[idx] = { ...j, nome: `${j.nome} (pendente)` };
@@ -150,7 +146,6 @@ export const PeladaListas = ({
       }
     }
 
-    // 3. Preenche com avulsos (Premium > Comum, depois por ordem)
     const avulsosOrdenados = [...avulsosPresenca].sort((a, b) => {
       if (a.categoria === "premium" && b.categoria !== "premium") return -1;
       if (b.categoria === "premium" && a.categoria !== "premium") return 1;
@@ -251,7 +246,6 @@ export const PeladaListas = ({
       )}
       {renderListaEspera("Espera para Linha", linhaEspera, "text-gray-600")}
 
-      {/* Mensalistas Ausentes */}
       <div className="space-y-2">
         <h4 className="font-bold text-sm text-red-500">Mensalistas Ausentes</h4>
         {mensalistasAusentes.length === 0 ? (
