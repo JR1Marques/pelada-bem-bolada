@@ -34,7 +34,7 @@ export const PeladaDetailsModal = ({
 }: PeladaDetailsModalProps) => {
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [pelada, setPelada] = useState<Pelada | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [timeA, setTimeA] = useState<Jogador[]>([]);
   const [timeB, setTimeB] = useState<Jogador[]>([]);
@@ -217,7 +217,7 @@ export const PeladaDetailsModal = ({
     setConfirming(false);
   };
 
-  const handleTogglePagamento = async (jogadorId: string, statusAtual: boolean) => {
+  const _handleTogglePagamento = async (jogadorId: string, statusAtual: boolean) => {
     const novoStatus = !statusAtual;
 
     const { error } = await supabase

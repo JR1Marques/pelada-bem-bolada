@@ -19,6 +19,56 @@ interface PeladaListasProps {
   dataHora: string;
 }
 
+// Função PURA fora do componente
+const processarLista = (jogadores: Jogador[], vagas: number, dataHora: string) => {
+  const agora = new Date();
+  const limite = new Date(dataHora);
+  limite.setMinutes(limite.getMinutes() - 60);
+  const passouLimite = agora >= limite;
+
+  const mensalistasPresenca = jogadores.filter((j) => j.categoria === "mensalista");
+  const avulsosPresenca = jogadores.filter((j) => j.categoria !== "mensalista");
+
+  const mensalistasPendentes = mensalistasPresenca.filter(
+    (j) => j.status_confirmacao === "pendente",
+  );
+
+  const titulares: (Jogador | null)[] = Array(vagas).fill(null);
+
+  let idx = 0;
+  for (const j of mensalistasPresenca) {
+    if (idx < vagas) {
+      titulares[idx] = j;
+      idx++;
+    }
+  }
+
+  for (const j of mensalistasPendentes) {
+    if (idx < vagas && !passouLimite) {
+      titulares[idx] = { ...j, nome: `${j.nome} (pendente)` };
+      idx++;
+    }
+  }
+
+  const avulsosOrdenados = [...avulsosPresenca].sort((a, b) => {
+    if (a.categoria === "premium" && b.categoria !== "premium") return -1;
+    if (b.categoria === "premium" && a.categoria !== "premium") return 1;
+    return new Date(a.confirmou_em).getTime() - new Date(b.confirmou_em).getTime();
+  });
+
+  let idxAvulso = 0;
+  for (let i = 0; i < vagas && idxAvulso < avulsosOrdenados.length; i++) {
+    if (titulares[i] === null) {
+      titulares[i] = avulsosOrdenados[idxAvulso];
+      idxAvulso++;
+    }
+  }
+
+  const espera = avulsosOrdenados.slice(idxAvulso);
+
+  return { titulares, espera };
+};
+
 export const PeladaListas = ({
   peladaId,
   vagasGoleiros,
@@ -36,7 +86,6 @@ export const PeladaListas = ({
     const carregarListas = async () => {
       setLoading(true);
 
-      // Query simples sem joins
       const { data: jogadores } = await supabase
         .from("jogadores_peladas")
         .select("*")
@@ -56,10 +105,8 @@ export const PeladaListas = ({
       const jogadoresComDetalhes: Jogador[] = [];
 
       for (const j of jogadores) {
-        // Busca posição da própria tabela
         let posicao = j.posicao;
 
-        // Fallback: busca da tabela perfis
         if (!posicao || posicao === "Curinga") {
           const { data: perfil } = await supabase
             .from("perfis")
@@ -71,7 +118,6 @@ export const PeladaListas = ({
           }
         }
 
-        // Busca categoria
         const { data: membroData } = await supabase
           .from("membros_grupo")
           .select("categoria")
@@ -89,13 +135,11 @@ export const PeladaListas = ({
         });
       }
 
-      // Separa mensalistas ausentes
       const ausentes = jogadoresComDetalhes.filter(
         (j) => j.categoria === "mensalista" && j.status_confirmacao === "ausencia",
       );
       setMensalistasAusentes(ausentes);
 
-      // Filtra apenas quem confirmou presença
       const presentes = jogadoresComDetalhes.filter((j) => j.status_confirmacao === "presenca");
 
       const goleiros = presentes.filter((j) => j.posicao === "Goleiro");
@@ -115,62 +159,12 @@ export const PeladaListas = ({
     carregarListas();
   }, [peladaId, vagasGoleiros, vagasLinha, dataHora]);
 
-  const processarLista = (jogadores: Jogador[], vagas: number, dataHora: string) => {
-    const agora = new Date();
-    const limite = new Date(dataHora);
-    limite.setMinutes(limite.getMinutes() - 60);
-    const passouLimite = agora >= limite;
-
-    const mensalistasPresenca = jogadores.filter((j) => j.categoria === "mensalista");
-    const avulsosPresenca = jogadores.filter((j) => j.categoria !== "mensalista");
-
-    const mensalistasPendentes = mensalistasPresenca.filter(
-      (j) => j.status_confirmacao === "pendente",
-    );
-    const vagasPendentes = passouLimite ? 0 : mensalistasPendentes.length;
-
-    const titulares: (Jogador | null)[] = Array(vagas).fill(null);
-
-    let idx = 0;
-    for (const j of mensalistasPresenca) {
-      if (idx < vagas) {
-        titulares[idx] = j;
-        idx++;
-      }
-    }
-
-    for (const j of mensalistasPendentes) {
-      if (idx < vagas && !passouLimite) {
-        titulares[idx] = { ...j, nome: `${j.nome} (pendente)` };
-        idx++;
-      }
-    }
-
-    const avulsosOrdenados = [...avulsosPresenca].sort((a, b) => {
-      if (a.categoria === "premium" && b.categoria !== "premium") return -1;
-      if (b.categoria === "premium" && a.categoria !== "premium") return 1;
-      return new Date(a.confirmou_em).getTime() - new Date(b.confirmou_em).getTime();
-    });
-
-    let idxAvulso = 0;
-    for (let i = 0; i < vagas && idxAvulso < avulsosOrdenados.length; i++) {
-      if (titulares[i] === null) {
-        titulares[i] = avulsosOrdenados[idxAvulso];
-        idxAvulso++;
-      }
-    }
-
-    const espera = avulsosOrdenados.slice(idxAvulso);
-
-    return { titulares, espera };
-  };
-
   const renderListaTitulares = (titulo: string, jogadores: (Jogador | null)[], cor: string) => (
     <div className="space-y-2">
       <h4 className={`font-bold text-sm ${cor}`}>{titulo}</h4>
       {jogadores.map((j, i) => (
         <motion.div
-          key={i}
+          key={j ? j.id : `${titulo}-vaga-${i}`}
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: i * 0.05 }}
@@ -220,8 +214,8 @@ export const PeladaListas = ({
   if (loading) {
     return (
       <div className="space-y-3">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-16 bg-gray-200 rounded-lg animate-pulse" />
+        {[1, 2, 3, 4].map((num) => (
+          <div key={`skeleton-${num}`} className="h-16 bg-gray-200 rounded-lg animate-pulse" />
         ))}
       </div>
     );

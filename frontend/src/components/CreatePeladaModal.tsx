@@ -56,9 +56,9 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
       valor_por_jogador: valor ? parseFloat(valor) : 0,
       criado_por: user.id,
       grupo_id: grupoPadrao?.id || null,
-      vagas_goleiros: parseInt(vagasGoleiros) || 2,
-      vagas_linha: parseInt(vagasLinha) || 15,
-      quantidade_times: parseInt(quantidadeTimes) || 2,
+      vagas_goleiros: parseInt(vagasGoleiros, 10) || 2,
+      vagas_linha: parseInt(vagasLinha, 10) || 15,
+      quantidade_times: parseInt(quantidadeTimes, 10) || 2,
     });
 
     if (dbError) {
