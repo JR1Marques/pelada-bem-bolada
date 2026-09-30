@@ -9,6 +9,7 @@ interface JogadorProcessado {
   posicao: string;
   categoria: string;
   status: "titular" | "de_fora";
+  confirmou_em: string;
 }
 
 interface ListaOficialProps {
@@ -90,7 +91,20 @@ export const ListaOficial = ({
     carregarOuProcessar();
   }, [peladaId, vagasGoleiros, vagasLinha, dataHora]);
 
-  const processarListaCompleta = (jogadores: any[], vagasGol: number, vagasLin: number) => {
+  // Função movida para dentro do useEffect implicitamente ou tipada corretamente
+  const processarListaCompleta = (
+    jogadores: {
+      status_confirmacao?: string;
+      categoria?: string;
+      confirmou_em: string;
+      posicao?: string;
+      nome: string;
+      id: string;
+      usuario_id: string;
+    }[],
+    vagasGol: number,
+    vagasLin: number,
+  ) => {
     // Filtra apenas quem confirmou presença
     const presentes = jogadores.filter((j) => j.status_confirmacao === "presenca");
 
@@ -98,9 +112,9 @@ export const ListaOficial = ({
     const linha = presentes.filter((j) => j.posicao !== "Goleiro");
 
     // Ordena por prioridade: Mensalista > Premium > Comum, depois por ordem de chegada
-    const ordenarPorPrioridade = (arr: any[]) =>
+    const ordenarPorPrioridade = (arr: typeof jogadores) =>
       [...arr].sort((a, b) => {
-        const pesoCategoria = (cat: string) => {
+        const pesoCategoria = (cat: string | undefined) => {
           if (cat === "mensalista") return 3;
           if (cat === "premium") return 2;
           return 1;
