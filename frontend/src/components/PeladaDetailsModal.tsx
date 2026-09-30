@@ -40,7 +40,7 @@ export const PeladaDetailsModal = ({
   const [timeB, setTimeB] = useState<Jogador[]>([]);
   const [dividindo, setDividindo] = useState(false);
   const [mensagemSucesso, setMensagemSucesso] = useState("");
-  const [ehMensalista, setEhMensalista] = useState(false);
+  const [ehAdmin, setEhAdmin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,11 +60,11 @@ export const PeladaDetailsModal = ({
         if (grupo) {
           const { data: meuMembro } = await supabase
             .from("membros_grupo")
-            .select("categoria")
+            .select("papel, categoria")
             .eq("grupo_id", grupo.id)
             .eq("usuario_id", user.id)
             .single();
-          setEhMensalista(meuMembro?.categoria === "mensalista");
+          setEhAdmin(meuMembro?.papel === "admin" || meuMembro?.papel === "co-admin");
         }
       }
 
@@ -100,7 +100,6 @@ export const PeladaDetailsModal = ({
   };
 
   const buscarPosicaoDoUsuario = async (userId: string): Promise<string> => {
-    // 1. Tenta ler da tabela perfis
     const { data: perfil } = await supabase
       .from("perfis")
       .select("posicao")
@@ -109,7 +108,6 @@ export const PeladaDetailsModal = ({
 
     if (perfil?.posicao) return perfil.posicao;
 
-    // 2. Fallback: tenta ler do metadata do usuário logado
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -217,18 +215,19 @@ export const PeladaDetailsModal = ({
     setConfirming(false);
   };
 
-  const _handleTogglePagamento = async (jogadorId: string, statusAtual: boolean) => {
-    const novoStatus = !statusAtual;
+  const handleExcluirPelada = async () => {
+    if (!peladaId) return;
 
-    const { error } = await supabase
-      .from("jogadores_peladas")
-      .update({ pagou: novoStatus })
-      .eq("id", jogadorId);
+    const { error } = await supabase.from("peladas").delete().eq("id", peladaId);
 
     if (!error) {
-      setJogadores((prev) =>
-        prev.map((j) => (j.id === jogadorId ? { ...j, pagou: novoStatus } : j)),
-      );
+      mostrarMensagem("Pelada excluída com sucesso.");
+      setTimeout(() => {
+        onClose();
+        window.location.reload();
+      }, 1500);
+    } else {
+      mostrarMensagem("Erro ao excluir pelada. Verifique se você é administrador.");
     }
   };
 
@@ -274,23 +273,6 @@ export const PeladaDetailsModal = ({
     setTimeB(times[1] || []);
 
     setDividindo(false);
-  };
-
-  const handleExcluirPelada = async () => {
-    if (!peladaId) return;
-
-    const { error } = await supabase.from("peladas").delete().eq("id", peladaId);
-
-    if (!error) {
-      mostrarMensagem("Pelada excluída com sucesso.");
-      setTimeout(() => {
-        onClose();
-        // Força recarregamento da lista de peladas no Dashboard
-        window.location.reload();
-      }, 1500);
-    } else {
-      mostrarMensagem("Erro ao excluir pelada. Verifique se você é administrador.");
-    }
   };
 
   const totalConfirmados = jogadores.filter(
@@ -417,7 +399,7 @@ export const PeladaDetailsModal = ({
                     )}
                   </motion.button>
 
-                  {ehMensalista && !jaConfirmou && !jaConfirmouAusencia && (
+                  {ehAdmin && !jaConfirmou && !jaConfirmouAusencia && (
                     <motion.button
                       type="button"
                       onClick={handleConfirmarAusencia}
@@ -456,7 +438,7 @@ export const PeladaDetailsModal = ({
                       "Dividir Times"
                     )}
                   </motion.button>
-                  {/* Botão de Excluir - Apenas para Admins */}
+
                   {ehAdmin && (
                     <motion.button
                       type="button"
