@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { ListaOficial } from "./ListaOficial";
 import { PeladaListas } from "./PeladaListas";
 
 interface PeladaDetailsModalProps {
@@ -24,6 +25,8 @@ interface Pelada {
   vagas_linha: number;
   quantidade_times: number;
   data_hora: string;
+  grupo_recurrencia_id: string | null;
+  recorrencia: string;
 }
 
 export const PeladaDetailsModal = ({
@@ -42,6 +45,7 @@ export const PeladaDetailsModal = ({
   const [mensagemSucesso, setMensagemSucesso] = useState("");
   const [ehAdmin, setEhAdmin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [passouLimite, setPassouLimite] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !peladaId) return;
@@ -70,12 +74,20 @@ export const PeladaDetailsModal = ({
 
       const { data: peladaData } = await supabase
         .from("peladas")
-        .select("vagas_goleiros, vagas_linha, quantidade_times, data_hora")
+        .select(
+          "vagas_goleiros, vagas_linha, quantidade_times, data_hora, grupo_recurrencia_id, recorrencia",
+        )
         .eq("id", peladaId)
         .single();
 
       if (peladaData) {
         setPelada(peladaData);
+
+        // Verifica se já passou o horário limite (60 min antes)
+        const agora = new Date();
+        const limite = new Date(peladaData.data_hora);
+        limite.setMinutes(limite.getMinutes() - 60);
+        setPassouLimite(agora >= limite);
       }
 
       const { data, error } = await supabase
@@ -231,6 +243,25 @@ export const PeladaDetailsModal = ({
     }
   };
 
+  const handleExcluirSerieCompleta = async () => {
+    if (!pelada?.grupo_recurrencia_id) return;
+
+    const { error } = await supabase
+      .from("peladas")
+      .delete()
+      .eq("grupo_recurrencia_id", pelada.grupo_recurrencia_id);
+
+    if (!error) {
+      mostrarMensagem("Série completa excluída com sucesso.");
+      setTimeout(() => {
+        onClose();
+        window.location.reload();
+      }, 1500);
+    } else {
+      mostrarMensagem("Erro ao excluir série. Verifique se você é administrador.");
+    }
+  };
+
   const shuffleArray = (array: Jogador[]) => {
     const newArray = [...array];
     for (let i = newArray.length - 1; i > 0; i--) {
@@ -289,6 +320,13 @@ export const PeladaDetailsModal = ({
   const jaConfirmouAusencia = currentUserId
     ? jogadores.some((j) => j.usuario_id === currentUserId && j.status_confirmacao === "ausencia")
     : false;
+
+  const formatarRecorrencia = (rec: string) => {
+    if (rec === "semanal") return "Semanal";
+    if (rec === "quinzenal") return "Quinzenal";
+    if (rec === "mensal") return "Mensal";
+    return null;
+  };
 
   return (
     <AnimatePresence>
@@ -365,41 +403,65 @@ export const PeladaDetailsModal = ({
                 )}
 
                 {pelada && (
-                  <PeladaListas
-                    peladaId={peladaId}
-                    vagasGoleiros={pelada.vagas_goleiros}
-                    vagasLinha={pelada.vagas_linha}
-                    dataHora={pelada.data_hora}
-                  />
+                  <>
+                    {/* Antes do limite: mostra a lista dinâmica */}
+                    {!passouLimite && (
+                      <PeladaListas
+                        peladaId={peladaId}
+                        vagasGoleiros={pelada.vagas_goleiros}
+                        vagasLinha={pelada.vagas_linha}
+                        dataHora={pelada.data_hora}
+                      />
+                    )}
+
+                    {/* Depois do limite: mostra a lista oficial congelada */}
+                    <ListaOficial
+                      peladaId={peladaId}
+                      vagasGoleiros={pelada.vagas_goleiros}
+                      vagasLinha={pelada.vagas_linha}
+                      dataHora={pelada.data_hora}
+                    />
+                  </>
                 )}
 
                 <div className="space-y-2">
-                  <motion.button
-                    type="button"
-                    onClick={handleConfirmar}
-                    disabled={confirming}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className={`w-full font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm ${
-                      jaConfirmou
-                        ? "bg-red-100 text-red-700 hover:bg-red-200"
-                        : "bg-pelada-yellow text-pelada-blue hover:bg-yellow-400"
-                    }`}
-                  >
-                    {confirming ? (
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ repeat: Infinity, duration: 1 }}
-                        className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                      />
-                    ) : jaConfirmou ? (
-                      "Cancelar Presença"
-                    ) : (
-                      "Confirmar Presença"
-                    )}
-                  </motion.button>
+                  {/* Botão de Confirmar - Só aparece antes do limite */}
+                  {!passouLimite && (
+                    <motion.button
+                      type="button"
+                      onClick={handleConfirmar}
+                      disabled={confirming}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm ${
+                        jaConfirmou
+                          ? "bg-red-100 text-red-700 hover:bg-red-200"
+                          : "bg-pelada-yellow text-pelada-blue hover:bg-yellow-400"
+                      }`}
+                    >
+                      {confirming ? (
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 1 }}
+                          className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
+                        />
+                      ) : jaConfirmou ? (
+                        "Cancelar Presença"
+                      ) : (
+                        "Confirmar Presença"
+                      )}
+                    </motion.button>
+                  )}
 
-                  {ehAdmin && !jaConfirmou && !jaConfirmouAusencia && (
+                  {/* Mensagem após o limite */}
+                  {passouLimite && (
+                    <div className="bg-orange-50 border border-orange-200 text-orange-700 text-xs font-medium p-3 rounded-lg text-center">
+                      ⏰ O horário limite para confirmação já passou. A lista oficial foi congelada.
+                    </div>
+                  )}
+
+                  {/* Botão de Confirmar Ausência - Só aparece antes do limite e para mensalistam */}
+                  {!passouLimite && ehAdmin && !jaConfirmou && !jaConfirmouAusencia && (
                     <motion.button
                       type="button"
                       onClick={handleConfirmarAusencia}
@@ -414,49 +476,76 @@ export const PeladaDetailsModal = ({
                     </motion.button>
                   )}
 
-                  {jaConfirmouAusencia && (
+                  {jaConfirmouAusencia && !passouLimite && (
                     <p className="text-xs text-center text-gray-500 italic">
                       Você confirmou sua ausência.
                     </p>
                   )}
 
-                  <motion.button
-                    type="button"
-                    onClick={handleDividirTimes}
-                    disabled={dividindo || totalConfirmados < 2}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="w-full bg-pelada-blue text-white font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm"
-                  >
-                    {dividindo ? (
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ repeat: Infinity, duration: 1 }}
-                        className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
-                      />
-                    ) : (
-                      "Dividir Times"
-                    )}
-                  </motion.button>
-
-                  {ehAdmin && (
+                  {/* Botão de Dividir Times - Só aparece antes do limite */}
+                  {!passouLimite && (
                     <motion.button
                       type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "Tem certeza que deseja excluir esta pelada? Esta ação não pode ser desfeita.",
-                          )
-                        ) {
-                          handleExcluirPelada();
-                        }
-                      }}
+                      onClick={handleDividirTimes}
+                      disabled={dividindo || totalConfirmados < 2}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      className="w-full bg-red-100 text-red-700 font-bold py-2 rounded-lg shadow-sm hover:bg-red-200 flex justify-center items-center gap-2 text-xs"
+                      className="w-full bg-pelada-blue text-white font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm"
                     >
-                      🗑️ Excluir Pelada
+                      {dividindo ? (
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 1 }}
+                          className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                        />
+                      ) : (
+                        "Dividir Times"
+                      )}
                     </motion.button>
+                  )}
+
+                  {/* Botões de Exclusão - Apenas para Admins */}
+                  {ehAdmin && (
+                    <>
+                      <motion.button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Tem certeza que deseja excluir esta pelada? Esta ação não pode ser desfeita.",
+                            )
+                          ) {
+                            handleExcluirPelada();
+                          }
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full bg-red-100 text-red-700 font-bold py-2 rounded-lg shadow-sm hover:bg-red-200 flex justify-center items-center gap-2 text-xs"
+                      >
+                        🗑️ Excluir Esta Pelada
+                      </motion.button>
+
+                      {pelada?.grupo_recurrencia_id && (
+                        <motion.button
+                          type="button"
+                          onClick={() => {
+                            const recorrenciaLabel = formatarRecorrencia(pelada.recorrencia);
+                            if (
+                              window.confirm(
+                                `ATENÇÃO: Você está prestes a excluir TODAS as peladas da série "${recorrenciaLabel}". Esta ação não pode ser desfeita. Deseja continuar?`,
+                              )
+                            ) {
+                              handleExcluirSerieCompleta();
+                            }
+                          }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="w-full bg-red-600 text-white font-bold py-2 rounded-lg shadow-sm hover:bg-red-700 flex justify-center items-center gap-2 text-xs"
+                        >
+                          🗑️ Excluir Série Completa ({formatarRecorrencia(pelada.recorrencia)})
+                        </motion.button>
+                      )}
+                    </>
                   )}
                 </div>
 

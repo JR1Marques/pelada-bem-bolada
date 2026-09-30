@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 interface Jogador {
@@ -81,7 +81,7 @@ export const PeladaListas = ({
   const [mensalistasAusentes, setMensalistasAusentes] = useState<Jogador[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const carregarListas = async () => {
+  const carregarListas = useCallback(async () => {
     setLoading(true);
 
     const { data: jogadores } = await supabase
@@ -152,12 +152,11 @@ export const PeladaListas = ({
     setLinhaEspera(linResult.espera);
 
     setLoading(false);
-  };
+  }, [peladaId, vagasGoleiros, vagasLinha, dataHora]);
 
   useEffect(() => {
     carregarListas();
 
-    // Real-time subscription para atualizar automaticamente
     const subscription = supabase
       .channel(`pelada-${peladaId}`)
       .on(
@@ -177,7 +176,7 @@ export const PeladaListas = ({
     return () => {
       subscription.unsubscribe();
     };
-  }, [peladaId, vagasGoleiros, vagasLinha, dataHora]);
+  }, [carregarListas, peladaId]);
 
   const renderListaTitulares = (titulo: string, jogadores: (Jogador | null)[], cor: string) => (
     <div className="space-y-2">
