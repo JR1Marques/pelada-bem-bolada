@@ -117,6 +117,12 @@ export const Dashboard = () => {
       className="min-h-screen p-6 max-w-md mx-auto relative"
     >
       <header className="flex justify-between items-center mb-6">
+
+        /* NOVA LINHA: Número da versão visível no topo direito */}
+        <span className="absolute top-0 right-0 text-[10px] text-gray-400 font-mono bg-gray-100 px-1 rounded">
+          BUILD: v.14
+        </span>
+
         <div className="flex items-center gap-3">
           <img src="/brasao.png" alt="Logo" className="w-12 h-12 drop-shadow-md" />
           <div>

@@ -74,6 +74,8 @@ export const Login = () => {
             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-pelada-blue focus:border-transparent outline-none transition-all"
             placeholder="••••••••"
           />
+
+          <p className="text-[10px] text-gray-400 text-center mt-4 font-mono">Versão do App: 14</p>
         </div>
 
         {error && (
