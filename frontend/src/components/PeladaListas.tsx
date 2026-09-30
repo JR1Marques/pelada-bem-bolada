@@ -19,7 +19,6 @@ interface PeladaListasProps {
   dataHora: string;
 }
 
-// Função PURA fora do componente
 const processarLista = (jogadores: Jogador[], vagas: number, dataHora: string) => {
   const agora = new Date();
   const limite = new Date(dataHora);
@@ -82,81 +81,102 @@ export const PeladaListas = ({
   const [mensalistasAusentes, setMensalistasAusentes] = useState<Jogador[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const carregarListas = async () => {
-      setLoading(true);
+  const carregarListas = async () => {
+    setLoading(true);
 
-      const { data: jogadores } = await supabase
-        .from("jogadores_peladas")
-        .select("*")
-        .eq("pelada_id", peladaId)
-        .order("confirmou_em", { ascending: true });
+    const { data: jogadores } = await supabase
+      .from("jogadores_peladas")
+      .select("*")
+      .eq("pelada_id", peladaId)
+      .order("confirmou_em", { ascending: true });
 
-      if (!jogadores || jogadores.length === 0) {
-        setGoleirosTitulares(Array(vagasGoleiros).fill(null));
-        setGoleirosEspera([]);
-        setLinhaTitulares(Array(vagasLinha).fill(null));
-        setLinhaEspera([]);
-        setMensalistasAusentes([]);
-        setLoading(false);
-        return;
-      }
+    if (!jogadores || jogadores.length === 0) {
+      setGoleirosTitulares(Array(vagasGoleiros).fill(null));
+      setGoleirosEspera([]);
+      setLinhaTitulares(Array(vagasLinha).fill(null));
+      setLinhaEspera([]);
+      setMensalistasAusentes([]);
+      setLoading(false);
+      return;
+    }
 
-      const jogadoresComDetalhes: Jogador[] = [];
+    const jogadoresComDetalhes: Jogador[] = [];
 
-      for (const j of jogadores) {
-        let posicao = j.posicao;
+    for (const j of jogadores) {
+      let posicao = j.posicao;
 
-        if (!posicao || posicao === "Curinga") {
-          const { data: perfil } = await supabase
-            .from("perfis")
-            .select("posicao")
-            .eq("usuario_id", j.usuario_id)
-            .single();
-          if (perfil?.posicao) {
-            posicao = perfil.posicao;
-          }
-        }
-
-        const { data: membroData } = await supabase
-          .from("membros_grupo")
-          .select("categoria")
+      if (!posicao || posicao === "Curinga") {
+        const { data: perfil } = await supabase
+          .from("perfis")
+          .select("posicao")
           .eq("usuario_id", j.usuario_id)
           .single();
-
-        jogadoresComDetalhes.push({
-          id: j.id,
-          usuario_id: j.usuario_id,
-          nome: j.nome,
-          posicao: posicao || "Curinga",
-          categoria: membroData?.categoria || "comum",
-          status_confirmacao: j.status_confirmacao || "pendente",
-          confirmou_em: j.confirmou_em,
-        });
+        if (perfil?.posicao) {
+          posicao = perfil.posicao;
+        }
       }
 
-      const ausentes = jogadoresComDetalhes.filter(
-        (j) => j.categoria === "mensalista" && j.status_confirmacao === "ausencia",
-      );
-      setMensalistasAusentes(ausentes);
+      const { data: membroData } = await supabase
+        .from("membros_grupo")
+        .select("categoria")
+        .eq("usuario_id", j.usuario_id)
+        .single();
 
-      const presentes = jogadoresComDetalhes.filter((j) => j.status_confirmacao === "presenca");
+      jogadoresComDetalhes.push({
+        id: j.id,
+        usuario_id: j.usuario_id,
+        nome: j.nome,
+        posicao: posicao || "Curinga",
+        categoria: membroData?.categoria || "comum",
+        status_confirmacao: j.status_confirmacao || "pendente",
+        confirmou_em: j.confirmou_em,
+      });
+    }
 
-      const goleiros = presentes.filter((j) => j.posicao === "Goleiro");
-      const linha = presentes.filter((j) => j.posicao !== "Goleiro");
+    const ausentes = jogadoresComDetalhes.filter(
+      (j) => j.categoria === "mensalista" && j.status_confirmacao === "ausencia",
+    );
+    setMensalistasAusentes(ausentes);
 
-      const golResult = processarLista(goleiros, vagasGoleiros, dataHora);
-      const linResult = processarLista(linha, vagasLinha, dataHora);
+    const presentes = jogadoresComDetalhes.filter((j) => j.status_confirmacao === "presenca");
 
-      setGoleirosTitulares(golResult.titulares);
-      setGoleirosEspera(golResult.espera);
-      setLinhaTitulares(linResult.titulares);
-      setLinhaEspera(linResult.espera);
+    const goleiros = presentes.filter((j) => j.posicao === "Goleiro");
+    const linha = presentes.filter((j) => j.posicao !== "Goleiro");
 
-      setLoading(false);
-    };
+    const golResult = processarLista(goleiros, vagasGoleiros, dataHora);
+    const linResult = processarLista(linha, vagasLinha, dataHora);
 
+    setGoleirosTitulares(golResult.titulares);
+    setGoleirosEspera(golResult.espera);
+    setLinhaTitulares(linResult.titulares);
+    setLinhaEspera(linResult.espera);
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
     carregarListas();
+
+    // Real-time subscription para atualizar automaticamente
+    const subscription = supabase
+      .channel(`pelada-${peladaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "jogadores_peladas",
+          filter: `pelada_id=eq.${peladaId}`,
+        },
+        () => {
+          carregarListas();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [peladaId, vagasGoleiros, vagasLinha, dataHora]);
 
   const renderListaTitulares = (titulo: string, jogadores: (Jogador | null)[], cor: string) => (

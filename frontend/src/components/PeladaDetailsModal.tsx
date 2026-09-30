@@ -276,6 +276,23 @@ export const PeladaDetailsModal = ({
     setDividindo(false);
   };
 
+  const handleExcluirPelada = async () => {
+    if (!peladaId) return;
+
+    const { error } = await supabase.from("peladas").delete().eq("id", peladaId);
+
+    if (!error) {
+      mostrarMensagem("Pelada excluída com sucesso.");
+      setTimeout(() => {
+        onClose();
+        // Força recarregamento da lista de peladas no Dashboard
+        window.location.reload();
+      }, 1500);
+    } else {
+      mostrarMensagem("Erro ao excluir pelada. Verifique se você é administrador.");
+    }
+  };
+
   const totalConfirmados = jogadores.filter(
     (j) => j.confirmou && j.status_confirmacao === "presenca",
   ).length;
@@ -439,6 +456,26 @@ export const PeladaDetailsModal = ({
                       "Dividir Times"
                     )}
                   </motion.button>
+                  {/* Botão de Excluir - Apenas para Admins */}
+                  {ehAdmin && (
+                    <motion.button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "Tem certeza que deseja excluir esta pelada? Esta ação não pode ser desfeita.",
+                          )
+                        ) {
+                          handleExcluirPelada();
+                        }
+                      }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="w-full bg-red-100 text-red-700 font-bold py-2 rounded-lg shadow-sm hover:bg-red-200 flex justify-center items-center gap-2 text-xs"
+                    >
+                      🗑️ Excluir Pelada
+                    </motion.button>
+                  )}
                 </div>
 
                 <AnimatePresence>
