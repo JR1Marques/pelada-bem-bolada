@@ -15,6 +15,8 @@ interface Pelada {
   data_hora: string;
   local: string;
   valor_por_jogador: number;
+  recorrencia: string;
+  grupo_recurrencia_id: string | null;
   jogadores_peladas?: { confirmou: boolean; pagou: boolean; usuario_id: string }[];
 }
 
@@ -55,14 +57,32 @@ export const Dashboard = () => {
         setEhAdmin(meuMembro?.papel === "admin" || meuMembro?.papel === "co-admin");
       }
 
-      // Busca peladas
+      // Busca peladas futuras (a partir de agora)
+      const agora = new Date().toISOString();
       const { data, error } = await supabase
         .from("peladas")
         .select("*, jogadores_peladas(confirmou, pagou, usuario_id)")
+        .gte("data_hora", agora)
         .order("data_hora", { ascending: true });
 
       if (!error && data) {
-        setPeladas(data);
+        // Filtrar: para cada grupo_recurrencia_id, manter apenas a PRÓXIMA pelada
+        const gruposRecorrentesVistos = new Set<string>();
+        const peladasFiltradas: Pelada[] = [];
+
+        for (const pelada of data) {
+          if (pelada.grupo_recurrencia_id) {
+            // É parte de uma série recorrente
+            if (gruposRecorrentesVistos.has(pelada.grupo_recurrencia_id)) {
+              // Já vimos essa série, pular
+              continue;
+            }
+            gruposRecorrentesVistos.add(pelada.grupo_recurrencia_id);
+          }
+          peladasFiltradas.push(pelada);
+        }
+
+        setPeladas(peladasFiltradas);
       }
       setLoading(false);
     };
@@ -74,7 +94,6 @@ export const Dashboard = () => {
     await supabase.auth.signOut();
   };
 
-  // Monta as abas conforme o papel do usuário
   const tabs: { key: TabType; label: string; show: boolean }[] = [
     { key: "peladas", label: "Peladas", show: true },
     { key: "cards", label: "Cards", show: true },
@@ -83,6 +102,13 @@ export const Dashboard = () => {
   ];
 
   const visibleTabs = tabs.filter((t) => t.show);
+
+  const formatarRecorrencia = (rec: string) => {
+    if (rec === "semanal") return "Semanal";
+    if (rec === "quinzenal") return "Quinzenal";
+    if (rec === "mensal") return "Mensal";
+    return null;
+  };
 
   return (
     <motion.main
@@ -154,6 +180,8 @@ export const Dashboard = () => {
               const totalConfirmados =
                 pelada.jogadores_peladas?.filter((j) => j.confirmou).length || 0;
 
+              const recorrenciaLabel = formatarRecorrencia(pelada.recorrencia);
+
               return (
                 <GameCard
                   key={pelada.id}
@@ -166,6 +194,7 @@ export const Dashboard = () => {
                     minute: "2-digit",
                   })}
                   players={totalConfirmados}
+                  recorrencia={recorrenciaLabel || undefined}
                   onClick={() => setSelectedPeladaId(pelada.id)}
                 />
               );
@@ -192,12 +221,30 @@ export const Dashboard = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={() => {
+          // Recarregar peladas
+          const agora = new Date().toISOString();
           supabase
             .from("peladas")
             .select("*, jogadores_peladas(confirmou, pagou, usuario_id)")
+            .gte("data_hora", agora)
             .order("data_hora", { ascending: true })
             .then(({ data }) => {
-              if (data) setPeladas(data);
+              if (data) {
+                const gruposRecorrentesVistos = new Set<string>();
+                const peladasFiltradas: Pelada[] = [];
+
+                for (const pelada of data) {
+                  if (pelada.grupo_recurrencia_id) {
+                    if (gruposRecorrentesVistos.has(pelada.grupo_recurrencia_id)) {
+                      continue;
+                    }
+                    gruposRecorrentesVistos.add(pelada.grupo_recurrencia_id);
+                  }
+                  peladasFiltradas.push(pelada);
+                }
+
+                setPeladas(peladasFiltradas);
+              }
             });
         }}
       />
