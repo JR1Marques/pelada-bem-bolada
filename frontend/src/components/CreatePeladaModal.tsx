@@ -19,7 +19,7 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
   const [vagasLinha, setVagasLinha] = useState("15");
   const [quantidadeTimes, setQuantidadeTimes] = useState("2");
   const [recorrencia, setRecorrencia] = useState<RecorrenciaType>("nenhuma");
-  const [diaSemana, setDiaSemana] = useState("4"); // quinta-feira por padrão
+  const [diaSemana, setDiaSemana] = useState("4");
   const [dataFimRecurrencia, setDataFimRecurrencia] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -43,39 +43,32 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
   const gerarDatasRecorrentes = (
     dataInicial: Date,
     recorrencia: RecorrenciaType,
-    diaSemana: number,
+    _diaSemana: number,
     dataFim: Date | null,
   ): Date[] => {
-    const datas: Date[] = [dataInicial]; // A primeira data é sempre a inicial
-    let dataAtual = new Date(dataInicial);
+    const datas: Date[] = [dataInicial];
+    const dataAtual = new Date(dataInicial);
 
-    // Limite de segurança: no máximo 52 ocorrências (1 ano)
     const limiteOcorrencias = 52;
     const limiteData = new Date();
     limiteData.setFullYear(limiteData.getFullYear() + 1);
 
     while (datas.length < limiteOcorrencias && dataAtual < limiteData) {
       if (recorrencia === "semanal") {
-        dataAtual = new Date(dataAtual);
         dataAtual.setDate(dataAtual.getDate() + 7);
       } else if (recorrencia === "quinzenal") {
-        dataAtual = new Date(dataAtual);
         dataAtual.setDate(dataAtual.getDate() + 14);
       } else if (recorrencia === "mensal") {
-        dataAtual = new Date(dataAtual);
         dataAtual.setMonth(dataAtual.getMonth() + 1);
       } else {
         break;
       }
 
-      // Se tem data de fim, parar quando passar dela
       if (dataFim && dataAtual > dataFim) {
         break;
       }
 
-      // Manter o mesmo horário da data inicial
       dataAtual.setHours(dataInicial.getHours(), dataInicial.getMinutes(), 0, 0);
-
       datas.push(new Date(dataAtual));
     }
 
@@ -109,16 +102,13 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
       const dataInicial = new Date(dataHora);
       const dataFim = dataFimRecurrencia ? new Date(dataFimRecurrencia) : null;
 
-      // Se for recorrente, gerar um ID de grupo para todas as peladas da série
       const grupoRecurrenciaId = recorrencia !== "nenhuma" ? crypto.randomUUID() : null;
 
-      // Gerar as datas das peladas
       const datas =
         recorrencia !== "nenhuma"
           ? gerarDatasRecorrentes(dataInicial, recorrencia, parseInt(diaSemana, 10), dataFim)
           : [dataInicial];
 
-      // Inserir todas as peladas
       const peladasParaInserir = datas.map((data) => ({
         titulo,
         data_hora: data.toISOString(),
@@ -145,7 +135,7 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
         onSuccess();
         onClose();
       }
-    } catch (err) {
+    } catch {
       setError("Erro ao criar pelada. Tente novamente.");
       setIsLoading(false);
     }
@@ -255,7 +245,6 @@ export const CreatePeladaModal = ({ isOpen, onClose, onSuccess }: CreatePeladaMo
                   />
                 </div>
 
-                {/* Seção de Recorrência */}
                 <div className="border-t border-gray-200 pt-4">
                   <label
                     htmlFor="recorrencia"
