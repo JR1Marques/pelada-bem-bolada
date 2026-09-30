@@ -24,6 +24,8 @@ interface Pelada {
   vagas_linha: number;
   quantidade_times: number;
   data_hora: string;
+  grupo_recurrencia_id: string | null;
+  recorrencia: string;
 }
 
 export const PeladaDetailsModal = ({
@@ -70,7 +72,9 @@ export const PeladaDetailsModal = ({
 
       const { data: peladaData } = await supabase
         .from("peladas")
-        .select("vagas_goleiros, vagas_linha, quantidade_times, data_hora")
+        .select(
+          "vagas_goleiros, vagas_linha, quantidade_times, data_hora, grupo_recurrencia_id, recorrencia",
+        )
         .eq("id", peladaId)
         .single();
 
@@ -231,6 +235,25 @@ export const PeladaDetailsModal = ({
     }
   };
 
+  const handleExcluirSerieCompleta = async () => {
+    if (!pelada?.grupo_recurrencia_id) return;
+
+    const { error } = await supabase
+      .from("peladas")
+      .delete()
+      .eq("grupo_recurrencia_id", pelada.grupo_recurrencia_id);
+
+    if (!error) {
+      mostrarMensagem("Série completa excluída com sucesso.");
+      setTimeout(() => {
+        onClose();
+        window.location.reload();
+      }, 1500);
+    } else {
+      mostrarMensagem("Erro ao excluir série. Verifique se você é administrador.");
+    }
+  };
+
   const shuffleArray = (array: Jogador[]) => {
     const newArray = [...array];
     for (let i = newArray.length - 1; i > 0; i--) {
@@ -289,6 +312,13 @@ export const PeladaDetailsModal = ({
   const jaConfirmouAusencia = currentUserId
     ? jogadores.some((j) => j.usuario_id === currentUserId && j.status_confirmacao === "ausencia")
     : false;
+
+  const formatarRecorrencia = (rec: string) => {
+    if (rec === "semanal") return "Semanal";
+    if (rec === "quinzenal") return "Quinzenal";
+    if (rec === "mensal") return "Mensal";
+    return null;
+  };
 
   return (
     <AnimatePresence>
@@ -439,24 +469,49 @@ export const PeladaDetailsModal = ({
                     )}
                   </motion.button>
 
+                  {/* Botões de Exclusão - Apenas para Admins */}
                   {ehAdmin && (
-                    <motion.button
-                      type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "Tem certeza que deseja excluir esta pelada? Esta ação não pode ser desfeita.",
-                          )
-                        ) {
-                          handleExcluirPelada();
-                        }
-                      }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="w-full bg-red-100 text-red-700 font-bold py-2 rounded-lg shadow-sm hover:bg-red-200 flex justify-center items-center gap-2 text-xs"
-                    >
-                      🗑️ Excluir Pelada
-                    </motion.button>
+                    <>
+                      <motion.button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Tem certeza que deseja excluir esta pelada? Esta ação não pode ser desfeita.",
+                            )
+                          ) {
+                            handleExcluirPelada();
+                          }
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full bg-red-100 text-red-700 font-bold py-2 rounded-lg shadow-sm hover:bg-red-200 flex justify-center items-center gap-2 text-xs"
+                      >
+                        🗑️ Excluir Esta Pelada
+                      </motion.button>
+
+                      {/* Botão de Excluir Série Completa - Apenas se for recorrente */}
+                      {pelada?.grupo_recurrencia_id && (
+                        <motion.button
+                          type="button"
+                          onClick={() => {
+                            const recorrenciaLabel = formatarRecorrencia(pelada.recorrencia);
+                            if (
+                              window.confirm(
+                                `ATENÇÃO: Você está prestes a excluir TODAS as peladas da série "${recorrenciaLabel}". Esta ação não pode ser desfeita. Deseja continuar?`,
+                              )
+                            ) {
+                              handleExcluirSerieCompleta();
+                            }
+                          }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="w-full bg-red-600 text-white font-bold py-2 rounded-lg shadow-sm hover:bg-red-700 flex justify-center items-center gap-2 text-xs"
+                        >
+                          🗑️ Excluir Série Completa ({formatarRecorrencia(pelada.recorrencia)})
+                        </motion.button>
+                      )}
+                    </>
                   )}
                 </div>
 
