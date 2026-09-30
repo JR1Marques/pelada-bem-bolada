@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { ListaOficial } from "./ListaOficial";
 import { PeladaListas } from "./PeladaListas";
 
 interface PeladaDetailsModalProps {
@@ -365,12 +366,23 @@ export const PeladaDetailsModal = ({
                 )}
 
                 {pelada && (
-                  <PeladaListas
-                    peladaId={peladaId}
-                    vagasGoleiros={pelada.vagas_goleiros}
-                    vagasLinha={pelada.vagas_linha}
-                    dataHora={pelada.data_hora}
-                  />
+                  <>
+                    {/* Antes do limite: mostra a lista dinâmica */}
+                    <PeladaListas
+                      peladaId={peladaId}
+                      vagasGoleiros={pelada.vagas_goleiros}
+                      vagasLinha={pelada.vagas_linha}
+                      dataHora={pelada.data_hora}
+                    />
+
+                    {/* Depois do limite: mostra a lista oficial congelada */}
+                    <ListaOficial
+                      peladaId={peladaId}
+                      vagasGoleiros={pelada.vagas_goleiros}
+                      vagasLinha={pelada.vagas_linha}
+                      dataHora={pelada.data_hora}
+                    />
+                  </>
                 )}
 
                 <div className="space-y-2">
