@@ -193,6 +193,7 @@ export const Dashboard = () => {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
+                  dataHoraIso={pelada.data_hora}
                   players={totalConfirmados}
                   recorrencia={recorrenciaLabel || undefined}
                   onClick={() => setSelectedPeladaId(pelada.id)}

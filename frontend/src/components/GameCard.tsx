@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 interface GameCardProps {
   title: string;
   date: string;
+  dataHoraIso?: string; // Novo prop para calcular o limite
   players: number;
   isLoading?: boolean;
   recorrencia?: string;
@@ -12,6 +13,7 @@ interface GameCardProps {
 export const GameCard = ({
   title,
   date,
+  dataHoraIso,
   players,
   isLoading,
   recorrencia,
@@ -31,6 +33,16 @@ export const GameCard = ({
     );
   }
 
+  // Calcula o horário limite (60 minutos antes)
+  const getHorarioLimite = () => {
+    if (!dataHoraIso) return null;
+    const data = new Date(dataHoraIso);
+    data.setMinutes(data.getMinutes() - 60);
+    return data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const horarioLimite = getHorarioLimite();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -40,7 +52,6 @@ export const GameCard = ({
       onClick={onClick}
       className="bg-white rounded-2xl shadow-md p-5 cursor-pointer border border-gray-100 hover:border-pelada-blue transition-colors relative"
     >
-      {/* Selo de Recorrência */}
       {recorrencia && (
         <div className="absolute top-3 right-3 bg-pelada-blue text-white text-xs font-bold px-2 py-1 rounded-full">
           🔄 {recorrencia}
@@ -48,10 +59,19 @@ export const GameCard = ({
       )}
 
       <h3 className="text-lg font-bold text-gray-800 mb-2 capitalize">{title}</h3>
+
       <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
         <span>📅</span>
         <span>{date}</span>
       </div>
+
+      {horarioLimite && (
+        <div className="flex items-center gap-2 text-xs text-orange-600 font-semibold mb-2 bg-orange-50 w-fit px-2 py-1 rounded-md">
+          <span>⏰</span>
+          <span>Confirmações até: {horarioLimite}</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 text-sm text-gray-600">
         <span>👥</span>
         <span>

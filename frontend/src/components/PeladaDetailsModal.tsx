@@ -54,9 +54,7 @@ export const PeladaDetailsModal = ({
       setLoading(true);
       setMensagemSucesso("");
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       setCurrentUserId(user?.id || null);
 
       if (user) {
@@ -74,9 +72,7 @@ export const PeladaDetailsModal = ({
 
       const { data: peladaData } = await supabase
         .from("peladas")
-        .select(
-          "vagas_goleiros, vagas_linha, quantidade_times, data_hora, grupo_recurrencia_id, recorrencia",
-        )
+        .select("vagas_goleiros, vagas_linha, quantidade_times, data_hora, grupo_recurrencia_id, recorrencia")
         .eq("id", peladaId)
         .single();
 
@@ -100,198 +96,131 @@ export const PeladaDetailsModal = ({
     setTimeB([]);
   }, [isOpen, peladaId]);
 
-  // 🔥 NOVO: Timer em tempo real para atualizar o estado do limite a cada 30 segundos
   useEffect(() => {
     if (!pelada) return;
-
     const verificarLimite = () => {
       const agora = new Date();
       const limite = new Date(pelada.data_hora);
       limite.setMinutes(limite.getMinutes() - 60);
       setPassouLimite(agora >= limite);
     };
-
-    verificarLimite(); // Verifica imediatamente ao carregar a pelada
-    const intervalo = setInterval(verificarLimite, 30000); // Verifica a cada 30 segundos
-
-    return () => clearInterval(intervalo); // Limpa o timer ao fechar o modal
+    verificarLimite();
+    const intervalo = setInterval(verificarLimite, 30000);
+    return () => clearInterval(intervalo);
   }, [pelada]);
 
   const mostrarMensagem = (texto: string) => {
     setMensagemSucesso(texto);
-    setTimeout(() => setMensagemSucesso(""), 4000); // Aumentei para 4s para ler com calma
+    // Se for mensagem de erro de limite, recarrega a página após 2s
+    if (texto.includes("limite")) {
+      setTimeout(() => window.location.reload(), 2000);
+    } else {
+      setTimeout(() => setMensagemSucesso(""), 4000);
+    }
   };
 
-  // 🔥 NOVO: Função auxiliar de segurança para validar o tempo no momento do clique
   const validarTempoRestante = (): boolean => {
     if (!pelada) return false;
     const agora = new Date();
     const limite = new Date(pelada.data_hora);
     limite.setMinutes(limite.getMinutes() - 60);
-
+    
     if (agora >= limite) {
-      mostrarMensagem(
-        "⏰ O horário limite para alterações já passou. A lista oficial foi congelada.",
-      );
+      mostrarMensagem("⏰ O horário limite já passou. A página será atualizada para mostrar a lista congelada.");
       return false;
     }
     return true;
   };
 
   const buscarPosicaoDoUsuario = async (userId: string): Promise<string> => {
-    const { data: perfil } = await supabase
-      .from("perfis")
-      .select("posicao")
-      .eq("usuario_id", userId)
-      .single();
-
+    const { data: perfil } = await supabase.from("perfis").select("posicao").eq("usuario_id", userId).single();
     if (perfil?.posicao) return perfil.posicao;
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user?.id === userId && user.user_metadata?.position) {
-      return user.user_metadata.position;
-    }
-
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.id === userId && user.user_metadata?.position) return user.user_metadata.position;
     return "Curinga";
   };
 
   const handleConfirmar = async () => {
     if (!peladaId) return;
-
-    // 🔥 Validação de segurança no clique
     if (!validarTempoRestante()) return;
 
     setConfirming(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setConfirming(false);
-      return;
-    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setConfirming(false); return; }
 
     const jaConfirmou = jogadores.find((j) => j.usuario_id === user.id);
 
-    if (jaConfirmou) {
-      if (jaConfirmou.status_confirmacao === "presenca") {
-        await supabase.from("jogadores_peladas").delete().eq("id", jaConfirmou.id);
-        mostrarMensagem("Sua presença foi cancelada.");
+    try {
+      if (jaConfirmou) {
+        if (jaConfirmou.status_confirmacao === "presenca") {
+          await supabase.from("jogadores_peladas").delete().eq("id", jaConfirmou.id);
+          mostrarMensagem("Sua presença foi cancelada. Atualizando...");
+        } else {
+          const posicao = await buscarPosicaoDoUsuario(user.id);
+          await supabase.from("jogadores_peladas").update({ status_confirmacao: "presenca", confirmou: true, confirmou_em: new Date().toISOString(), posicao }).eq("id", jaConfirmou.id);
+          mostrarMensagem("Você confirmou sua presença! ⚽ Atualizando...");
+        }
       } else {
+        const nomeExibicao = user.user_metadata?.nickname || user.email?.split("@")[0] || "Jogador";
         const posicao = await buscarPosicaoDoUsuario(user.id);
-        await supabase
-          .from("jogadores_peladas")
-          .update({
-            status_confirmacao: "presenca",
-            confirmou: true,
-            confirmou_em: new Date().toISOString(),
-            posicao,
-          })
-          .eq("id", jaConfirmou.id);
-        mostrarMensagem("Você confirmou sua presença nesta partida! ⚽");
+        await supabase.from("jogadores_peladas").insert({
+          pelada_id: peladaId, usuario_id: user.id, nome: nomeExibicao, confirmou: true, pagou: false, status_confirmacao: "presenca", confirmou_em: new Date().toISOString(), posicao,
+        });
+        mostrarMensagem("Você confirmou sua presença! ⚽ Atualizando...");
       }
-    } else {
-      const nomeExibicao = user.user_metadata?.nickname || user.email?.split("@")[0] || "Jogador";
-      const posicao = await buscarPosicaoDoUsuario(user.id);
-
-      await supabase.from("jogadores_peladas").insert({
-        pelada_id: peladaId,
-        usuario_id: user.id,
-        nome: nomeExibicao,
-        confirmou: true,
-        pagou: false,
-        status_confirmacao: "presenca",
-        confirmou_em: new Date().toISOString(),
-        posicao,
-      });
-      mostrarMensagem("Você confirmou sua presença nesta partida! ⚽");
+      
+      // Força o recarregamento da página para garantir que o Android mostre a lista correta
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+      mostrarMensagem("Erro ao processar. Tente novamente.");
+      setConfirming(false);
     }
-
-    const { data } = await supabase.from("jogadores_peladas").select("*").eq("pelada_id", peladaId);
-    if (data) setJogadores(data);
-
-    setConfirming(false);
   };
 
   const handleConfirmarAusencia = async () => {
     if (!peladaId || !currentUserId) return;
-
-    // 🔥 Validação de segurança no clique
     if (!validarTempoRestante()) return;
 
     setConfirming(true);
-
     const jaConfirmou = jogadores.find((j) => j.usuario_id === currentUserId);
 
-    if (jaConfirmou) {
-      await supabase
-        .from("jogadores_peladas")
-        .update({
-          status_confirmacao: "ausencia",
-          confirmou: false,
-          confirmou_em: new Date().toISOString(),
-        })
-        .eq("id", jaConfirmou.id);
-    } else {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const nomeExibicao = user?.user_metadata?.nickname || user?.email?.split("@")[0] || "Jogador";
-
-      await supabase.from("jogadores_peladas").insert({
-        pelada_id: peladaId,
-        usuario_id: currentUserId,
-        nome: nomeExibicao,
-        confirmou: false,
-        pagou: false,
-        status_confirmacao: "ausencia",
-        confirmou_em: new Date().toISOString(),
-        posicao: await buscarPosicaoDoUsuario(currentUserId),
-      });
+    try {
+      if (jaConfirmou) {
+        await supabase.from("jogadores_peladas").update({ status_confirmacao: "ausencia", confirmou: false, confirmou_em: new Date().toISOString() }).eq("id", jaConfirmou.id);
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        const nomeExibicao = user?.user_metadata?.nickname || user?.email?.split("@")[0] || "Jogador";
+        await supabase.from("jogadores_peladas").insert({
+          pelada_id: peladaId, usuario_id: currentUserId, nome: nomeExibicao, confirmou: false, pagou: false, status_confirmacao: "ausencia", confirmou_em: new Date().toISOString(), posicao: await buscarPosicaoDoUsuario(currentUserId),
+        });
+      }
+      mostrarMensagem("Ausência confirmada. Atualizando...");
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+      mostrarMensagem("Erro ao processar. Tente novamente.");
+      setConfirming(false);
     }
-
-    mostrarMensagem("Você confirmou sua ausência. Os avulsos podem acompanhar as vagas.");
-
-    const { data } = await supabase.from("jogadores_peladas").select("*").eq("pelada_id", peladaId);
-    if (data) setJogadores(data);
-
-    setConfirming(false);
   };
 
   const handleExcluirPelada = async () => {
     if (!peladaId) return;
-
     const { error } = await supabase.from("peladas").delete().eq("id", peladaId);
-
     if (!error) {
       mostrarMensagem("Pelada excluída com sucesso.");
-      setTimeout(() => {
-        onClose();
-        window.location.reload();
-      }, 1500);
+      setTimeout(() => window.location.reload(), 1500);
     } else {
-      mostrarMensagem("Erro ao excluir pelada. Verifique se você é administrador.");
+      mostrarMensagem("Erro ao excluir pelada.");
     }
   };
 
   const handleExcluirSerieCompleta = async () => {
     if (!pelada?.grupo_recurrencia_id) return;
-
-    const { error } = await supabase
-      .from("peladas")
-      .delete()
-      .eq("grupo_recurrencia_id", pelada.grupo_recurrencia_id);
-
+    const { error } = await supabase.from("peladas").delete().eq("grupo_recurrencia_id", pelada.grupo_recurrencia_id);
     if (!error) {
       mostrarMensagem("Série completa excluída com sucesso.");
-      setTimeout(() => {
-        onClose();
-        window.location.reload();
-      }, 1500);
+      setTimeout(() => window.location.reload(), 1500);
     } else {
-      mostrarMensagem("Erro ao excluir série. Verifique se você é administrador.");
+      mostrarMensagem("Erro ao excluir série.");
     }
   };
 
@@ -305,56 +234,38 @@ export const PeladaDetailsModal = ({
   };
 
   const handleDividirTimes = async () => {
-    if (!validarTempoRestante()) return; // 🔥 Validação de segurança
-
+    if (!validarTempoRestante()) return;
     const confirmados = jogadores.filter((j) => j.confirmou && j.status_confirmacao === "presenca");
     if (confirmados.length < 2 || !pelada) return;
 
     setDividindo(true);
-
     const jogadoresComPosicao: { jogador: Jogador; posicao: string }[] = [];
-
     for (const j of confirmados) {
-      const posicao = j.posicao || (await buscarPosicaoDoUsuario(j.usuario_id));
+      const posicao = j.posicao || await buscarPosicaoDoUsuario(j.usuario_id);
       jogadoresComPosicao.push({ jogador: j, posicao });
     }
 
     const goleiros = jogadoresComPosicao.filter((j) => j.posicao === "Goleiro");
     const linha = jogadoresComPosicao.filter((j) => j.posicao !== "Goleiro");
-
     const linhaEmbaralhada = shuffleArray(linha.map((j) => j.jogador));
 
     const times: Jogador[][] = Array.from({ length: pelada.quantidade_times }, () => []);
-    linhaEmbaralhada.forEach((jogador, index) => {
-      times[index % pelada.quantidade_times].push(jogador);
-    });
-
-    goleiros.forEach((g, index) => {
-      if (index < pelada.quantidade_times) {
-        times[index].unshift(g.jogador);
-      }
-    });
+    linhaEmbaralhada.forEach((jogador, index) => { times[index % pelada.quantidade_times].push(jogador); });
+    goleiros.forEach((g, index) => { if (index < pelada.quantidade_times) times[index].unshift(g.jogador); });
 
     setTimeA(times[0] || []);
     setTimeB(times[1] || []);
-
     setDividindo(false);
   };
 
-  const totalConfirmados = jogadores.filter(
-    (j) => j.confirmou && j.status_confirmacao === "presenca",
-  ).length;
+  const totalConfirmados = jogadores.filter((j) => j.confirmou && j.status_confirmacao === "presenca").length;
   const totalPagantes = jogadores.filter((j) => j.pagou).length;
   const totalEsperado = totalConfirmados * valorPorJogador;
   const totalArrecadado = totalPagantes * valorPorJogador;
   const faltaArrecadar = totalEsperado - totalArrecadado;
 
-  const jaConfirmou = currentUserId
-    ? jogadores.some((j) => j.usuario_id === currentUserId && j.status_confirmacao === "presenca")
-    : false;
-  const jaConfirmouAusencia = currentUserId
-    ? jogadores.some((j) => j.usuario_id === currentUserId && j.status_confirmacao === "ausencia")
-    : false;
+  const jaConfirmou = currentUserId ? jogadores.some((j) => j.usuario_id === currentUserId && j.status_confirmacao === "presenca") : false;
+  const jaConfirmouAusencia = currentUserId ? jogadores.some((j) => j.usuario_id === currentUserId && j.status_confirmacao === "ausencia") : false;
 
   const formatarRecorrencia = (rec: string) => {
     if (rec === "semanal") return "Semanal";
@@ -366,44 +277,17 @@ export const PeladaDetailsModal = ({
   return (
     <AnimatePresence>
       {isOpen && peladaId && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
-          >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold text-pelada-blue">Detalhes da Pelada</h2>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="text-gray-400 hover:text-gray-600 text-2xl"
-                >
-                  &times;
-                </button>
+                <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
               </div>
 
               <AnimatePresence>
                 {mensagemSucesso && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10, height: 0 }}
-                    animate={{ opacity: 1, y: 0, height: "auto" }}
-                    exit={{ opacity: 0, y: -10, height: 0 }}
-                    className={`mb-4 border text-sm font-medium p-3 rounded-lg text-center ${
-                      mensagemSucesso.includes("⏰")
-                        ? "bg-orange-50 border-orange-200 text-orange-700"
-                        : "bg-green-50 border-green-200 text-green-700"
-                    }`}
-                  >
+                  <motion.div initial={{ opacity: 0, y: -10, height: 0 }} animate={{ opacity: 1, y: 0, height: "auto" }} exit={{ opacity: 0, y: -10, height: 0 }} className={`mb-4 border text-sm font-medium p-3 rounded-lg text-center ${mensagemSucesso.includes("⏰") ? "bg-orange-50 border-orange-200 text-orange-700" : "bg-green-50 border-green-200 text-green-700"}`}>
                     {mensagemSucesso}
                   </motion.div>
                 )}
@@ -411,173 +295,58 @@ export const PeladaDetailsModal = ({
 
               <div className="space-y-6">
                 {valorPorJogador > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3"
-                  >
-                    <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide">
-                      Resumo Financeiro
-                    </h3>
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
+                    <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Resumo Financeiro</h3>
                     <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="bg-white p-2 rounded-lg shadow-sm">
-                        <p className="text-gray-500 text-xs">Esperado</p>
-                        <p className="font-bold text-pelada-blue">R$ {totalEsperado.toFixed(2)}</p>
-                      </div>
-                      <div className="bg-white p-2 rounded-lg shadow-sm">
-                        <p className="text-gray-500 text-xs">Arrecadado</p>
-                        <p className="font-bold text-green-600">R$ {totalArrecadado.toFixed(2)}</p>
-                      </div>
+                      <div className="bg-white p-2 rounded-lg shadow-sm"><p className="text-gray-500 text-xs">Esperado</p><p className="font-bold text-pelada-blue">R$ {totalEsperado.toFixed(2)}</p></div>
+                      <div className="bg-white p-2 rounded-lg shadow-sm"><p className="text-gray-500 text-xs">Arrecadado</p><p className="font-bold text-green-600">R$ {totalArrecadado.toFixed(2)}</p></div>
                     </div>
-                    {faltaArrecadar > 0 && (
-                      <motion.p
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="text-xs text-red-500 text-center font-medium"
-                      >
-                        Faltam R$ {faltaArrecadar.toFixed(2)} para fechar a conta!
-                      </motion.p>
-                    )}
+                    {faltaArrecadar > 0 && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-red-500 text-center font-medium">Faltam R$ {faltaArrecadar.toFixed(2)} para fechar a conta!</motion.p>}
                   </motion.div>
                 )}
 
                 {pelada && (
                   <>
-                    {!passouLimite && (
-                      <PeladaListas
-                        peladaId={peladaId}
-                        vagasGoleiros={pelada.vagas_goleiros}
-                        vagasLinha={pelada.vagas_linha}
-                        dataHora={pelada.data_hora}
-                      />
-                    )}
-
-                    <ListaOficial
-                      peladaId={peladaId}
-                      vagasGoleiros={pelada.vagas_goleiros}
-                      vagasLinha={pelada.vagas_linha}
-                      dataHora={pelada.data_hora}
-                    />
+                    {!passouLimite && <PeladaListas peladaId={peladaId} vagasGoleiros={pelada.vagas_goleiros} vagasLinha={pelada.vagas_linha} dataHora={pelada.data_hora} />}
+                    <ListaOficial peladaId={peladaId} vagasGoleiros={pelada.vagas_goleiros} vagasLinha={pelada.vagas_linha} dataHora={pelada.data_hora} />
                   </>
                 )}
 
                 <div className="space-y-2">
                   {!passouLimite && (
-                    <motion.button
-                      type="button"
-                      onClick={handleConfirmar}
-                      disabled={confirming}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={`w-full font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm ${
-                        jaConfirmou
-                          ? "bg-red-100 text-red-700 hover:bg-red-200"
-                          : "bg-pelada-yellow text-pelada-blue hover:bg-yellow-400"
-                      }`}
-                    >
-                      {confirming ? (
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ repeat: Infinity, duration: 1 }}
-                          className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                        />
-                      ) : jaConfirmou ? (
-                        "Cancelar Presença"
-                      ) : (
-                        "Confirmar Presença"
-                      )}
+                    <motion.button type="button" onClick={handleConfirmar} disabled={confirming} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className={`w-full font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm ${jaConfirmou ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-pelada-yellow text-pelada-blue hover:bg-yellow-400"}`}>
+                      {confirming ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-4 h-4 border-2 border-current border-t-transparent rounded-full" /> : jaConfirmou ? "Cancelar Presença" : "Confirmar Presença"}
                     </motion.button>
                   )}
 
                   {passouLimite && (
                     <div className="bg-orange-50 border border-orange-200 text-orange-700 text-xs font-medium p-3 rounded-lg text-center flex items-center justify-center gap-2">
-                      <span>⏰</span>
-                      <span>
-                        O horário limite para confirmação já passou. A lista oficial foi congelada.
-                      </span>
+                      <span>⏰</span><span>O horário limite já passou. A lista oficial está congelada.</span>
                     </div>
                   )}
 
                   {!passouLimite && ehAdmin && !jaConfirmou && !jaConfirmouAusencia && (
-                    <motion.button
-                      type="button"
-                      onClick={handleConfirmarAusencia}
-                      disabled={confirming}
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="w-full bg-gray-100 text-gray-700 font-bold py-2 rounded-lg shadow-sm hover:bg-gray-200 disabled:opacity-50 flex justify-center items-center gap-2 text-xs"
-                    >
+                    <motion.button type="button" onClick={handleConfirmarAusencia} disabled={confirming} initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full bg-gray-100 text-gray-700 font-bold py-2 rounded-lg shadow-sm hover:bg-gray-200 disabled:opacity-50 flex justify-center items-center gap-2 text-xs">
                       {confirming ? "..." : "Confirmar Ausência (Mensalista)"}
                     </motion.button>
                   )}
 
-                  {jaConfirmouAusencia && !passouLimite && (
-                    <p className="text-xs text-center text-gray-500 italic">
-                      Você confirmou sua ausência.
-                    </p>
-                  )}
+                  {jaConfirmouAusencia && !passouLimite && <p className="text-xs text-center text-gray-500 italic">Você confirmou sua ausência.</p>}
 
                   {!passouLimite && (
-                    <motion.button
-                      type="button"
-                      onClick={handleDividirTimes}
-                      disabled={dividindo || totalConfirmados < 2}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="w-full bg-pelada-blue text-white font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm"
-                    >
-                      {dividindo ? (
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ repeat: Infinity, duration: 1 }}
-                          className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
-                        />
-                      ) : (
-                        "Dividir Times"
-                      )}
+                    <motion.button type="button" onClick={handleDividirTimes} disabled={dividindo || totalConfirmados < 2} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full bg-pelada-blue text-white font-bold py-3 rounded-lg shadow-md disabled:opacity-50 flex justify-center items-center gap-2 text-sm">
+                      {dividindo ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> : "Dividir Times"}
                     </motion.button>
                   )}
 
                   {ehAdmin && (
                     <>
-                      <motion.button
-                        type="button"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Tem certeza que deseja excluir esta pelada? Esta ação não pode ser desfeita.",
-                            )
-                          ) {
-                            handleExcluirPelada();
-                          }
-                        }}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="w-full bg-red-100 text-red-700 font-bold py-2 rounded-lg shadow-sm hover:bg-red-200 flex justify-center items-center gap-2 text-xs"
-                      >
+                      <motion.button type="button" onClick={() => { if (window.confirm("Tem certeza que deseja excluir esta pelada?")) handleExcluirPelada(); }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full bg-red-100 text-red-700 font-bold py-2 rounded-lg shadow-sm hover:bg-red-200 flex justify-center items-center gap-2 text-xs">
                         🗑️ Excluir Esta Pelada
                       </motion.button>
-
                       {pelada?.grupo_recurrencia_id && (
-                        <motion.button
-                          type="button"
-                          onClick={() => {
-                            const recorrenciaLabel = formatarRecorrencia(pelada.recorrencia);
-                            if (
-                              window.confirm(
-                                `ATENÇÃO: Você está prestes a excluir TODAS as peladas da série "${recorrenciaLabel}". Esta ação não pode ser desfeita. Deseja continuar?`,
-                              )
-                            ) {
-                              handleExcluirSerieCompleta();
-                            }
-                          }}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          className="w-full bg-red-600 text-white font-bold py-2 rounded-lg shadow-sm hover:bg-red-700 flex justify-center items-center gap-2 text-xs"
-                        >
-                          🗑️ Excluir Série Completa ({formatarRecorrencia(pelada.recorrencia)})
+                        <motion.button type="button" onClick={() => { if (window.confirm(`ATENÇÃO: Excluir TODAS as peladas da série "${formatarRecorrencia(pelada.recorrencia)}"?`)) handleExcluirSerieCompleta(); }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full bg-red-600 text-white font-bold py-2 rounded-lg shadow-sm hover:bg-red-700 flex justify-center items-center gap-2 text-xs">
+                          🗑️ Excluir Série Completa
                         </motion.button>
                       )}
                     </>
@@ -586,53 +355,7 @@ export const PeladaDetailsModal = ({
 
                 <AnimatePresence>
                   {(timeA.length > 0 || timeB.length > 0) && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="space-y-4 pt-4 border-t border-gray-200"
-                    >
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="space-y-4 pt-4 border-t border-gray-200">
                       <div>
                         <h4 className="font-bold text-pelada-blue mb-2">Time A</h4>
-                        <div className="space-y-1">
-                          {timeA.map((j, i) => (
-                            <motion.div
-                              key={j.id}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: i * 0.1 }}
-                              className="bg-blue-50 p-2 rounded text-sm capitalize"
-                            >
-                              {j.nome}
-                            </motion.div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <h4 className="font-bold text-red-600 mb-2">Time B</h4>
-                        <div className="space-y-1">
-                          {timeB.map((j, i) => (
-                            <motion.div
-                              key={j.id}
-                              initial={{ opacity: 0, x: 20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: i * 0.1 }}
-                              className="bg-red-50 p-2 rounded text-sm capitalize"
-                            >
-                              {j.nome}
-                            </motion.div>
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-};
+                        <div className="space-y-1">{timeA.map((j, i) => (<motion.div key={j.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className="bg-blue-50 p-2 rounded text-sm capitalize">{j.nome}</motion.div>))}</div>
