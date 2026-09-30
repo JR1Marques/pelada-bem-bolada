@@ -82,12 +82,6 @@ export const PeladaDetailsModal = ({
 
       if (peladaData) {
         setPelada(peladaData);
-
-        // Verifica se já passou o horário limite (60 min antes)
-        const agora = new Date();
-        const limite = new Date(peladaData.data_hora);
-        limite.setMinutes(limite.getMinutes() - 60);
-        setPassouLimite(agora >= limite);
       }
 
       const { data, error } = await supabase
@@ -106,9 +100,42 @@ export const PeladaDetailsModal = ({
     setTimeB([]);
   }, [isOpen, peladaId]);
 
+  // 🔥 NOVO: Timer em tempo real para atualizar o estado do limite a cada 30 segundos
+  useEffect(() => {
+    if (!pelada) return;
+
+    const verificarLimite = () => {
+      const agora = new Date();
+      const limite = new Date(pelada.data_hora);
+      limite.setMinutes(limite.getMinutes() - 60);
+      setPassouLimite(agora >= limite);
+    };
+
+    verificarLimite(); // Verifica imediatamente ao carregar a pelada
+    const intervalo = setInterval(verificarLimite, 30000); // Verifica a cada 30 segundos
+
+    return () => clearInterval(intervalo); // Limpa o timer ao fechar o modal
+  }, [pelada]);
+
   const mostrarMensagem = (texto: string) => {
     setMensagemSucesso(texto);
-    setTimeout(() => setMensagemSucesso(""), 3000);
+    setTimeout(() => setMensagemSucesso(""), 4000); // Aumentei para 4s para ler com calma
+  };
+
+  // 🔥 NOVO: Função auxiliar de segurança para validar o tempo no momento do clique
+  const validarTempoRestante = (): boolean => {
+    if (!pelada) return false;
+    const agora = new Date();
+    const limite = new Date(pelada.data_hora);
+    limite.setMinutes(limite.getMinutes() - 60);
+
+    if (agora >= limite) {
+      mostrarMensagem(
+        "⏰ O horário limite para alterações já passou. A lista oficial foi congelada.",
+      );
+      return false;
+    }
+    return true;
   };
 
   const buscarPosicaoDoUsuario = async (userId: string): Promise<string> => {
@@ -132,6 +159,9 @@ export const PeladaDetailsModal = ({
 
   const handleConfirmar = async () => {
     if (!peladaId) return;
+
+    // 🔥 Validação de segurança no clique
+    if (!validarTempoRestante()) return;
 
     setConfirming(true);
     const {
@@ -187,6 +217,9 @@ export const PeladaDetailsModal = ({
 
   const handleConfirmarAusencia = async () => {
     if (!peladaId || !currentUserId) return;
+
+    // 🔥 Validação de segurança no clique
+    if (!validarTempoRestante()) return;
 
     setConfirming(true);
 
@@ -272,6 +305,8 @@ export const PeladaDetailsModal = ({
   };
 
   const handleDividirTimes = async () => {
+    if (!validarTempoRestante()) return; // 🔥 Validação de segurança
+
     const confirmados = jogadores.filter((j) => j.confirmou && j.status_confirmacao === "presenca");
     if (confirmados.length < 2 || !pelada) return;
 
@@ -363,7 +398,11 @@ export const PeladaDetailsModal = ({
                     initial={{ opacity: 0, y: -10, height: 0 }}
                     animate={{ opacity: 1, y: 0, height: "auto" }}
                     exit={{ opacity: 0, y: -10, height: 0 }}
-                    className="mb-4 bg-green-50 border border-green-200 text-green-700 text-sm font-medium p-3 rounded-lg text-center"
+                    className={`mb-4 border text-sm font-medium p-3 rounded-lg text-center ${
+                      mensagemSucesso.includes("⏰")
+                        ? "bg-orange-50 border-orange-200 text-orange-700"
+                        : "bg-green-50 border-green-200 text-green-700"
+                    }`}
                   >
                     {mensagemSucesso}
                   </motion.div>
@@ -404,7 +443,6 @@ export const PeladaDetailsModal = ({
 
                 {pelada && (
                   <>
-                    {/* Antes do limite: mostra a lista dinâmica */}
                     {!passouLimite && (
                       <PeladaListas
                         peladaId={peladaId}
@@ -414,7 +452,6 @@ export const PeladaDetailsModal = ({
                       />
                     )}
 
-                    {/* Depois do limite: mostra a lista oficial congelada */}
                     <ListaOficial
                       peladaId={peladaId}
                       vagasGoleiros={pelada.vagas_goleiros}
@@ -425,7 +462,6 @@ export const PeladaDetailsModal = ({
                 )}
 
                 <div className="space-y-2">
-                  {/* Botão de Confirmar - Só aparece antes do limite */}
                   {!passouLimite && (
                     <motion.button
                       type="button"
@@ -453,14 +489,15 @@ export const PeladaDetailsModal = ({
                     </motion.button>
                   )}
 
-                  {/* Mensagem após o limite */}
                   {passouLimite && (
-                    <div className="bg-orange-50 border border-orange-200 text-orange-700 text-xs font-medium p-3 rounded-lg text-center">
-                      ⏰ O horário limite para confirmação já passou. A lista oficial foi congelada.
+                    <div className="bg-orange-50 border border-orange-200 text-orange-700 text-xs font-medium p-3 rounded-lg text-center flex items-center justify-center gap-2">
+                      <span>⏰</span>
+                      <span>
+                        O horário limite para confirmação já passou. A lista oficial foi congelada.
+                      </span>
                     </div>
                   )}
 
-                  {/* Botão de Confirmar Ausência - Só aparece antes do limite e para mensalistam */}
                   {!passouLimite && ehAdmin && !jaConfirmou && !jaConfirmouAusencia && (
                     <motion.button
                       type="button"
@@ -482,7 +519,6 @@ export const PeladaDetailsModal = ({
                     </p>
                   )}
 
-                  {/* Botão de Dividir Times - Só aparece antes do limite */}
                   {!passouLimite && (
                     <motion.button
                       type="button"
@@ -504,7 +540,6 @@ export const PeladaDetailsModal = ({
                     </motion.button>
                   )}
 
-                  {/* Botões de Exclusão - Apenas para Admins */}
                   {ehAdmin && (
                     <>
                       <motion.button
